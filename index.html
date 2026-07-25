@@ -6,6 +6,7 @@
 <title>AB Chemicals · Relatório de Despesas de Viagem</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
 <style>
   :root{
     --teal-deep:#163832;
@@ -310,6 +311,97 @@
     cursor:pointer;
   }
 
+  /* ---- month selector ---- */
+  .month-bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:20px;
+    flex-wrap:wrap;
+  }
+  .month-nav{
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .month-nav button{
+    padding:6px 10px;
+    font-size:14px;
+    background:transparent;
+    color:var(--teal-deep);
+    border:1px solid var(--line);
+  }
+  .month-nav select{
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:15px;
+    color:var(--teal-deep);
+    border:1px solid var(--line);
+    background:#fff;
+    padding:8px 10px;
+    text-transform:capitalize;
+  }
+  .month-count{
+    font-size:12px;
+    color:var(--ink-soft);
+    font-family:'IBM Plex Mono',monospace;
+  }
+
+  /* ---- approval bar ---- */
+  .approval-bar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:12px 16px;
+    background:#fff;
+    border:1px solid var(--line);
+    margin-bottom:24px;
+    flex-wrap:wrap;
+  }
+  .approval-status{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  .status-dot{
+    width:9px;height:9px;
+    border-radius:50%;
+    background:var(--ink-soft);
+    flex-shrink:0;
+  }
+  .approval-status.sent .status-dot{background:var(--teal);}
+  .approval-status.sent{color:var(--teal-deep);}
+  .approval-status.aprovado .status-dot{background:var(--teal);}
+  .approval-status.aprovado{color:var(--teal-deep);}
+  .approval-status.reprovado .status-dot{background:var(--danger);}
+  .approval-status.reprovado{color:var(--danger);}
+  #submitReportBtn:disabled{opacity:.55;cursor:not-allowed;}
+
+  /* ---- reviewer approve/reject screen ---- */
+  .review-overlay{
+    display:none;
+    position:fixed;inset:0;
+    background:var(--paper);
+    z-index:100;
+    align-items:flex-start;
+    justify-content:center;
+    padding:40px 20px;
+    overflow-y:auto;
+  }
+  .review-overlay.open{display:flex;}
+  .review-card{
+    background:#fff;
+    border:1px solid var(--line);
+    border-top:3px solid var(--teal-deep);
+    max-width:520px;
+    width:100%;
+    padding:26px 28px;
+  }
+
   @media (max-width: 720px){
     .grid{grid-template-columns:1fr 1fr;}
     .field.span2, .field.span3{grid-column:span 2;}
@@ -345,6 +437,23 @@
   </header>
 
   <div class="route-rail" id="routeRail"></div>
+
+  <div class="month-bar">
+    <div class="month-nav">
+      <button type="button" id="prevMonth" title="Mês anterior">‹</button>
+      <select id="monthSelect"></select>
+      <button type="button" id="nextMonth" title="Próximo mês">›</button>
+    </div>
+    <div class="month-count" id="monthCount"></div>
+  </div>
+
+  <div class="approval-bar">
+    <div class="approval-status" id="approvalStatus">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Rascunho — ainda não enviado</span>
+    </div>
+    <button type="button" id="submitReportBtn">Submeter para aprovação</button>
+  </div>
 
   <div class="summary">
     <div class="card">
@@ -452,11 +561,34 @@
   <img id="modalImg" alt="Recibo ampliado">
 </div>
 
+<div class="review-overlay" id="reviewOverlay">
+  <div class="review-card">
+    <div class="brand" style="margin-bottom:18px;">
+      <div class="brand-mark">AB</div>
+      <div>
+        <h1 style="font-family:'Space Grotesk',sans-serif;font-size:18px;margin:0;">AB Chemicals</h1>
+        <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.3px;">Revisão de relatório de despesas</p>
+      </div>
+    </div>
+    <h2 id="reviewMonth" style="font-family:'Space Grotesk',sans-serif;font-size:20px;margin:0 0 14px;color:var(--teal-deep);"></h2>
+    <div id="reviewSummary" style="font-size:13.5px;color:var(--ink);line-height:1.8;margin-bottom:18px;"></div>
+    <div class="field" style="margin-bottom:18px;">
+      <label for="reviewComment">Comentário (opcional)</label>
+      <textarea id="reviewComment" placeholder="Observações sobre a decisão…"></textarea>
+    </div>
+    <div id="reviewResult" style="display:none;font-size:14px;font-weight:600;margin-bottom:14px;"></div>
+    <div class="actions" style="justify-content:flex-start;">
+      <button type="button" id="approveBtn" style="background:var(--teal);border-color:var(--teal);">Aprovar relatório</button>
+      <button type="button" id="rejectBtn" style="background:var(--danger);border-color:var(--danger);">Reprovar relatório</button>
+    </div>
+  </div>
+</div>
+
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc,
-  doc, onSnapshot, serverTimestamp, query, orderBy
+  doc, onSnapshot, serverTimestamp, query, orderBy, setDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import {
   getStorage, ref, uploadString, getDownloadURL, deleteObject
@@ -504,6 +636,27 @@ window._fb = {
   async deleteReceipt(path){
     if(!path) return;
     try{ await deleteObject(ref(storage, path)); }catch(e){ /* já pode ter sido removido */ }
+  },
+  listenReports(cb){
+    return onSnapshot(collection(db, "relatorios_mensais"), snap=>{
+      const map = {};
+      snap.forEach(d=> map[d.id] = d.data());
+      cb(map);
+    });
+  },
+  async submitReport(monthKey, data){
+    return await setDoc(doc(db, "relatorios_mensais", monthKey), {
+      ...data,
+      status: "enviado",
+      enviadoEm: serverTimestamp()
+    }, { merge: true });
+  },
+  async updateReportStatus(monthKey, status, comentario){
+    return await setDoc(doc(db, "relatorios_mensais", monthKey), {
+      status,
+      comentario: comentario || null,
+      decididoEm: serverTimestamp()
+    }, { merge: true });
   }
 };
 </script>
@@ -524,10 +677,62 @@ window._fb = {
   const modalImg = document.getElementById('modalImg');
   const modalClose = document.getElementById('modalClose');
 
+  const monthSelect = document.getElementById('monthSelect');
+  const prevMonthBtn = document.getElementById('prevMonth');
+  const nextMonthBtn = document.getElementById('nextMonth');
+  const monthCount = document.getElementById('monthCount');
+  const reviewMonthKey = new URLSearchParams(window.location.search).get('revisar');
+
   let expenses = [];
+  let reportsByMonth = {};
   let editingId = null;
   let pendingPhotoDataUrl = null;
   let unsubscribe = null;
+  let unsubscribeReports = null;
+  let selectedMonth = monthKeyOf(new Date().toISOString().slice(0,10)); // 'YYYY-MM'
+
+  function monthKeyOf(dateStr){
+    return dateStr ? dateStr.slice(0,7) : null;
+  }
+
+  function monthLabel(key){
+    const [y,m] = key.split('-');
+    const label = new Date(Number(y), Number(m)-1, 1).toLocaleDateString('pt-BR',{month:'long', year:'numeric'});
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+
+  function availableMonths(){
+    const keys = new Set(expenses.map(e=>monthKeyOf(e.data)).filter(Boolean));
+    keys.add(selectedMonth);
+    return [...keys].sort((a,b)=> a < b ? 1 : -1); // desc
+  }
+
+  function filteredExpenses(){
+    return expenses.filter(e=> monthKeyOf(e.data) === selectedMonth);
+  }
+
+  function populateMonthSelect(){
+    const months = availableMonths();
+    const current = monthSelect.value;
+    monthSelect.innerHTML = months.map(k=>`<option value="${k}">${monthLabel(k)}</option>`).join('');
+    monthSelect.value = months.includes(selectedMonth) ? selectedMonth : months[0];
+    selectedMonth = monthSelect.value;
+  }
+
+  monthSelect.addEventListener('change', function(){
+    selectedMonth = monthSelect.value;
+    render();
+  });
+
+  function shiftMonth(delta){
+    const [y,m] = selectedMonth.split('-').map(Number);
+    const d = new Date(y, m-1+delta, 1);
+    selectedMonth = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    render();
+  }
+
+  prevMonthBtn.addEventListener('click', ()=> shiftMonth(-1));
+  nextMonthBtn.addEventListener('click', ()=> shiftMonth(1));
 
   function fmtBRL(n){
     return n.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
@@ -554,6 +759,12 @@ window._fb = {
     unsubscribe = fb.listen(items=>{
       expenses = items;
       render();
+      renderReviewScreen();
+    });
+    unsubscribeReports = fb.listenReports(map=>{
+      reportsByMonth = map;
+      render();
+      renderReviewScreen();
     });
   }
 
@@ -581,37 +792,120 @@ window._fb = {
     }
   }
 
-  function renderSummary(){
-    document.getElementById('sumCount').textContent = expenses.length;
+  function renderSummary(list){
+    document.getElementById('sumCount').textContent = list.length;
 
-    const total = expenses.reduce((acc,e)=>acc+Number(e.valor||0),0);
+    const total = list.reduce((acc,e)=>acc+Number(e.valor||0),0);
     document.getElementById('sumTotal').textContent = fmtBRL(total);
 
     const byCat = {};
-    expenses.forEach(e=>{ byCat[e.categoria] = (byCat[e.categoria]||0) + Number(e.valor||0); });
+    list.forEach(e=>{ byCat[e.categoria] = (byCat[e.categoria]||0) + Number(e.valor||0); });
     const topCat = Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a])[0];
     document.getElementById('sumTopCat').textContent = topCat || '—';
 
-    if(expenses.length){
-      const dates = expenses.map(e=>e.data).sort();
-      const first = fmtDate(dates[0]);
-      const last = fmtDate(dates[dates.length-1]);
-      document.getElementById('sumPeriod').textContent = first === last ? first : first+' – '+last;
-    } else {
-      document.getElementById('sumPeriod').textContent = '—';
-    }
+    document.getElementById('sumPeriod').textContent = monthLabel(selectedMonth);
 
-    renderRouteRail(expenses.length);
+    renderRouteRail(list.length);
   }
 
-  function renderManifest(){
-    document.getElementById('manifestId').textContent = String(expenses.length).padStart(4,'0');
+  function renderManifest(list){
+    document.getElementById('manifestId').textContent = selectedMonth.replace('-','') + '-' + String(list.length).padStart(3,'0');
     document.getElementById('issuedAt').textContent = new Date().toLocaleDateString('pt-BR');
   }
 
+  function renderApprovalStatus(list){
+    const box = document.getElementById('approvalStatus');
+    const text = document.getElementById('statusText');
+    const btn = document.getElementById('submitReportBtn');
+    const report = reportsByMonth[selectedMonth];
+
+    box.classList.remove('sent','aprovado','reprovado');
+
+    if(report && report.status === 'aprovado'){
+      box.classList.add('aprovado');
+      const when = report.decididoEm && report.decididoEm.toDate ? report.decididoEm.toDate().toLocaleString('pt-BR') : '';
+      text.textContent = 'Aprovado' + (when ? ' em ' + when : '') + (report.comentario ? ' — "' + report.comentario + '"' : '');
+      btn.textContent = 'Reenviar para aprovação';
+    } else if(report && report.status === 'reprovado'){
+      box.classList.add('reprovado');
+      const when = report.decididoEm && report.decididoEm.toDate ? report.decididoEm.toDate().toLocaleString('pt-BR') : '';
+      text.textContent = 'Reprovado' + (when ? ' em ' + when : '') + (report.comentario ? ' — "' + report.comentario + '"' : '');
+      btn.textContent = 'Reenviar para aprovação';
+    } else if(report && report.status === 'enviado'){
+      box.classList.add('sent');
+      const when = report.enviadoEm && report.enviadoEm.toDate ? report.enviadoEm.toDate().toLocaleString('pt-BR') : '';
+      text.textContent = 'Enviado para aprovação' + (when ? ' em ' + when : '');
+      btn.textContent = 'Reenviar para aprovação';
+    } else {
+      text.textContent = 'Rascunho — ainda não enviado';
+      btn.textContent = 'Submeter para aprovação';
+    }
+    btn.disabled = list.length === 0;
+  }
+
+  function renderReviewScreen(){
+    if(!reviewMonthKey) return;
+    document.getElementById('reviewOverlay').classList.add('open');
+    document.getElementById('reviewMonth').textContent = monthLabel(reviewMonthKey);
+
+    const list = expenses.filter(e=>monthKeyOf(e.data)===reviewMonthKey);
+    const total = list.reduce((acc,e)=>acc+Number(e.valor||0),0);
+    const colaboradores = [...new Set(list.map(e=>e.colaborador))].join(', ');
+    document.getElementById('reviewSummary').innerHTML =
+      '<strong>Colaborador(es):</strong> ' + escapeHtml(colaboradores||'—') + '<br>'
+      + '<strong>Lançamentos:</strong> ' + list.length + '<br>'
+      + '<strong>Total:</strong> ' + fmtBRL(total);
+
+    const report = reportsByMonth[reviewMonthKey];
+    const resultBox = document.getElementById('reviewResult');
+    const approveBtn = document.getElementById('approveBtn');
+    const rejectBtn = document.getElementById('rejectBtn');
+
+    if(report && (report.status === 'aprovado' || report.status === 'reprovado')){
+      resultBox.style.display = 'block';
+      resultBox.style.color = report.status === 'aprovado' ? 'var(--teal-deep)' : 'var(--danger)';
+      resultBox.textContent = report.status === 'aprovado'
+        ? 'Este relatório já foi aprovado.' : 'Este relatório já foi reprovado.';
+      approveBtn.disabled = true;
+      rejectBtn.disabled = true;
+    } else {
+      resultBox.style.display = 'none';
+      approveBtn.disabled = false;
+      rejectBtn.disabled = false;
+    }
+  }
+
+  async function decideReview(status){
+    const fb = await waitForFb();
+    const comentario = document.getElementById('reviewComment').value.trim();
+    const approveBtn = document.getElementById('approveBtn');
+    const rejectBtn = document.getElementById('rejectBtn');
+    approveBtn.disabled = true;
+    rejectBtn.disabled = true;
+    try{
+      await fb.updateReportStatus(reviewMonthKey, status, comentario);
+      const resultBox = document.getElementById('reviewResult');
+      resultBox.style.display = 'block';
+      resultBox.style.color = status === 'aprovado' ? 'var(--teal-deep)' : 'var(--danger)';
+      resultBox.textContent = status === 'aprovado' ? 'Relatório aprovado com sucesso.' : 'Relatório reprovado.';
+    }catch(err){
+      console.error(err);
+      alert('Erro ao registrar a decisão. Tente novamente.');
+      approveBtn.disabled = false;
+      rejectBtn.disabled = false;
+    }
+  }
+
+  document.getElementById('approveBtn').addEventListener('click', ()=> decideReview('aprovado'));
+  document.getElementById('rejectBtn').addEventListener('click', ()=> decideReview('reprovado'));
+
   function render(){
+    populateMonthSelect();
+    const list = filteredExpenses();
+    monthCount.textContent = expenses.length + ' despesa(s) no total, em ' + availableMonths().length + ' mês(es) registrados';
+
     tableBody.innerHTML = '';
-    const sorted = [...expenses].sort((a,b)=> a.data < b.data ? 1 : -1);
+    const sorted = [...list].sort((a,b)=> a.data < b.data ? 1 : -1);
 
     if(sorted.length === 0){
       emptyState.style.display = 'block';
@@ -638,8 +932,9 @@ window._fb = {
       });
     }
 
-    renderSummary();
-    renderManifest();
+    renderSummary(list);
+    renderManifest(list);
+    renderApprovalStatus(list);
   }
 
   function escapeHtml(str){
@@ -756,20 +1051,85 @@ window._fb = {
   modalClose.addEventListener('click', ()=> modal.classList.remove('open'));
   modal.addEventListener('click', (ev)=>{ if(ev.target === modal) modal.classList.remove('open'); });
 
-  document.getElementById('exportCsv').addEventListener('click', function(){
-    if(expenses.length === 0) return;
+  function buildCsv(list){
     const header = ['Data','Colaborador','Categoria','Descrição','Valor','Link do recibo'];
-    const rows = [...expenses].sort((a,b)=> a.data < b.data ? -1 : 1).map(e=>[
+    const rows = [...list].sort((a,b)=> a.data < b.data ? -1 : 1).map(e=>[
       fmtDate(e.data), e.colaborador, e.categoria, (e.descricao||'').replace(/;/g,','), Number(e.valor).toFixed(2).replace('.',','), e.reciboUrl||''
     ]);
-    const csv = [header, ...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+    return [header, ...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+  }
+
+  function downloadCsv(list){
+    const csv = buildCsv(list);
     const blob = new Blob(['\ufeff'+csv], { type:'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'ab-chemicals-despesas-viagem.csv';
+    a.download = 'ab-chemicals-despesas-viagem-' + selectedMonth + '.csv';
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  document.getElementById('exportCsv').addEventListener('click', function(){
+    const list = filteredExpenses();
+    if(list.length === 0) return;
+    downloadCsv(list);
+  });
+
+  emailjs.init({ publicKey: "e2QZvVniF5T6aJuRA" });
+
+  document.getElementById('submitReportBtn').addEventListener('click', async function(){
+    const list = filteredExpenses();
+    if(list.length === 0) return;
+    const btn = this;
+    const statusText = document.getElementById('statusText');
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    btn.textContent = 'Enviando…';
+
+    const total = list.reduce((acc,e)=>acc+Number(e.valor||0),0);
+    const colaboradores = [...new Set(list.map(e=>e.colaborador))].join(', ');
+
+    const sorted = [...list].sort((a,b)=> a.data < b.data ? -1 : 1);
+    const linhasItens = sorted.map(e =>
+      fmtDate(e.data) + ' | ' + e.colaborador + ' | ' + e.categoria + ' | ' + (e.descricao || '—') + ' | ' + fmtBRL(Number(e.valor))
+      + (e.reciboUrl ? ' | recibo: ' + e.reciboUrl : '')
+    ).join('\n');
+
+    const reviewLink = window.location.origin + window.location.pathname + '?revisar=' + selectedMonth;
+
+    const mensagem = 'Relatório de despesas de viagem para aprovação\n\n'
+      + 'Período: ' + monthLabel(selectedMonth) + '\n'
+      + 'Colaborador(es): ' + colaboradores + '\n'
+      + 'Total de lançamentos: ' + list.length + '\n'
+      + 'Valor total: ' + fmtBRL(total) + '\n\n'
+      + 'Para aprovar ou reprovar este relatório, acesse:\n' + reviewLink + '\n\n'
+      + 'Detalhamento:\n'
+      + 'Data | Colaborador | Categoria | Descrição | Valor | Recibo\n'
+      + linhasItens;
+
+    try{
+      await emailjs.send('service_pedidos', 'template_m8m586t', {
+        to_email: 'abchemicalspr@gmail.com',
+        subject: 'Relatório de despesas de viagem — ' + monthLabel(selectedMonth) + ' — AB Chemicals',
+        message: mensagem
+      });
+
+      const fb = await waitForFb();
+      await fb.submitReport(selectedMonth, {
+        colaboradores,
+        totalDespesas: total,
+        quantidade: list.length
+      });
+
+      statusText.textContent = 'Enviado com sucesso!';
+    }catch(err){
+      console.error(err);
+      statusText.textContent = 'Falha ao enviar — tente novamente';
+    }finally{
+      btn.disabled = false;
+      btn.textContent = originalLabel;
+    }
   });
 
   document.getElementById('printBtn').addEventListener('click', function(){
