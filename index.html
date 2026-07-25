@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AB Chemicals · Relatório de Despesas de Viagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --teal-deep:#163832;
+    --teal:#1E5A4E;
+    --teal-soft:#E4EEE9;
+    --paper:#F7F5EF;
+    --ink:#20241F;
+    --ink-soft:#5C6660;
+    --amber:#D98E2B;
+    --line:#C9D3CC;
+    --danger:#B4462C;
+    --radius:2px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:15px;
+    line-height:1.5;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 80px;}
+
+  /* ---- header / manifest strip ---- */
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    border-bottom:3px solid var(--teal-deep);
+    padding-bottom:16px;
+    margin-bottom:6px;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  .brand{display:flex;align-items:center;gap:14px;}
+  .brand-mark{
+    width:44px;height:44px;
+    background:var(--teal-deep);
+    display:flex;align-items:center;justify-content:center;
+    color:var(--paper);
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:700;
+    font-size:18px;
+    flex-shrink:0;
+  }
+  .brand h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:20px;
+    font-weight:700;
+    margin:0;
+    letter-spacing:.2px;
+  }
+  .brand p{margin:2px 0 0;font-size:12.5px;color:var(--ink-soft);letter-spacing:.3px;text-transform:uppercase;}
+  .manifest-id{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    text-align:right;
+  }
+  .manifest-id .num{color:var(--teal-deep);font-weight:600;}
+
+  /* route rail: dashed line with stop markers, visual signature */
+  .route-rail{
+    position:relative;
+    height:26px;
+    margin:0 0 26px;
+    display:flex;
+    align-items:center;
+  }
+  .route-rail::before{
+    content:"";
+    position:absolute;
+    left:0;right:0;top:50%;
+    height:2px;
+    background-image:linear-gradient(to right, var(--line) 60%, transparent 0%);
+    background-size:14px 2px;
+    background-repeat:repeat-x;
+    transform:translateY(-50%);
+  }
+  .route-rail .stop{
+    position:relative;
+    z-index:1;
+    width:9px;height:9px;
+    border-radius:50%;
+    background:var(--amber);
+    border:2px solid var(--paper);
+    box-shadow:0 0 0 1px var(--amber);
+    margin-right:calc(100% / 7);
+  }
+  .route-rail .stop:last-child{margin-right:0;background:var(--teal-deep);box-shadow:0 0 0 1px var(--teal-deep);}
+
+  /* ---- summary cards ---- */
+  .summary{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+    margin-bottom:28px;
+  }
+  .summary .card{
+    background:var(--paper);
+    padding:16px 18px;
+  }
+  .summary .card.total{background:var(--teal-deep);color:var(--paper);}
+  .summary .card .label{
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+  }
+  .summary .card.total .label{color:#B7CFC7;}
+  .summary .card .value{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:20px;
+    font-weight:600;
+  }
+
+  /* ---- form ---- */
+  .panel{
+    background:#fff;
+    border:1px solid var(--line);
+    padding:22px;
+    margin-bottom:28px;
+  }
+  .panel h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+    margin:0 0 18px;
+    color:var(--teal-deep);
+  }
+  .grid{
+    display:grid;
+    grid-template-columns:1fr 1fr 1fr;
+    gap:14px;
+  }
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field.span2{grid-column:span 2;}
+  .field.span3{grid-column:span 3;}
+  label{font-size:12px;color:var(--ink-soft);font-weight:500;}
+  input, select, textarea{
+    font-family:'IBM Plex Sans',sans-serif;
+    font-size:14px;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    background:var(--paper);
+    color:var(--ink);
+  }
+  input:focus, select:focus, textarea:focus{
+    outline:2px solid var(--teal);
+    outline-offset:1px;
+    background:#fff;
+  }
+  textarea{resize:vertical;min-height:44px;}
+  .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+  button{
+    font-family:'IBM Plex Sans',sans-serif;
+    font-size:13.5px;
+    font-weight:600;
+    padding:10px 18px;
+    border:1px solid var(--teal-deep);
+    border-radius:var(--radius);
+    background:var(--teal-deep);
+    color:#fff;
+    cursor:pointer;
+    letter-spacing:.2px;
+  }
+  button.ghost{background:transparent;color:var(--teal-deep);}
+  button:hover{opacity:.88;}
+  button:focus-visible, input:focus-visible, select:focus-visible{outline:2px solid var(--amber);}
+
+  /* ---- ledger table ---- */
+  table{width:100%;border-collapse:collapse;background:#fff;}
+  thead th{
+    text-align:left;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.5px;
+    color:var(--ink-soft);
+    padding:10px 12px;
+    border-bottom:2px solid var(--teal-deep);
+  }
+  tbody td{
+    padding:11px 12px;
+    border-bottom:1px solid var(--line);
+    font-size:13.5px;
+    vertical-align:top;
+  }
+  tbody tr:hover{background:var(--teal-soft);}
+  td.value, th.value{font-family:'IBM Plex Mono',monospace;text-align:right;white-space:nowrap;}
+  .cat-tag{
+    display:inline-block;
+    font-size:11px;
+    padding:2px 8px;
+    border:1px solid var(--teal);
+    color:var(--teal-deep);
+    border-radius:20px;
+  }
+  .row-actions{white-space:nowrap;}
+  .row-actions button{
+    padding:5px 9px;
+    font-size:12px;
+    background:transparent;
+    color:var(--ink-soft);
+    border:1px solid var(--line);
+    margin-left:6px;
+  }
+  .row-actions button:hover{color:var(--danger);border-color:var(--danger);}
+  .empty{
+    padding:40px 12px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:13.5px;
+  }
+
+  footer{
+    margin-top:28px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    font-size:12px;
+    color:var(--ink-soft);
+    flex-wrap:wrap;
+    gap:10px;
+  }
+  .status{font-family:'IBM Plex Mono',monospace;}
+
+  @media (max-width: 720px){
+    .grid{grid-template-columns:1fr 1fr;}
+    .field.span2, .field.span3{grid-column:span 2;}
+    .summary{grid-template-columns:1fr 1fr;}
+    table, thead, tbody, tr, td, th{display:block;}
+    thead{display:none;}
+    tbody tr{border-bottom:2px solid var(--line);padding:10px 0;}
+    tbody td{border:none;padding:4px 12px;display:flex;justify-content:space-between;gap:10px;}
+    tbody td::before{content:attr(data-label);color:var(--ink-soft);font-size:11px;text-transform:uppercase;}
+  }
+
+  @media print{
+    .panel.form, .actions, .row-actions, footer .hint{display:none !important;}
+    body{background:#fff;}
+  }
+
+  @media (prefers-reduced-motion: no-preference){
+    .panel, .summary .card{transition:box-shadow .15s ease;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <div class="brand-mark">AB</div>
+      <div>
+        <h1>AB Chemicals</h1>
+        <p>Relatório de despesas de viagem</p>
+      </div>
+    </div>
+    <div class="manifest-id">
+      Manifesto Nº <span class="num" id="manifestId">—</span><br>
+      Emitido em <span id="issuedAt">—</span>
+    </div>
+  </header>
+
+  <div class="route-rail" id="routeRail"></div>
+
+  <div class="summary">
+    <div class="card">
+      <div class="label">Despesas lançadas</div>
+      <div class="value" id="sumCount">0</div>
+    </div>
+    <div class="card">
+      <div class="label">Categoria líder</div>
+      <div class="value" id="sumTopCat" style="font-size:15px;">—</div>
+    </div>
+    <div class="card">
+      <div class="label">Período</div>
+      <div class="value" id="sumPeriod" style="font-size:14px;">—</div>
+    </div>
+    <div class="card total">
+      <div class="label">Total do relatório</div>
+      <div class="value" id="sumTotal">R$ 0,00</div>
+    </div>
+  </div>
+
+  <div class="panel form">
+    <h2>Lançar despesa</h2>
+    <form id="expenseForm">
+      <div class="grid">
+        <div class="field">
+          <label for="fData">Data</label>
+          <input type="date" id="fData" required>
+        </div>
+        <div class="field">
+          <label for="fColaborador">Colaborador</label>
+          <input type="text" id="fColaborador" placeholder="Nome do colaborador" required>
+        </div>
+        <div class="field">
+          <label for="fCategoria">Categoria</label>
+          <select id="fCategoria" required>
+            <option value="Transporte">Transporte</option>
+            <option value="Combustível">Combustível</option>
+            <option value="Pedágio">Pedágio</option>
+            <option value="Hospedagem">Hospedagem</option>
+            <option value="Alimentação">Alimentação</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+        <div class="field span2">
+          <label for="fDescricao">Descrição / cliente visitado</label>
+          <input type="text" id="fDescricao" placeholder="Ex.: Visita cliente — Distribuidora Norte, Londrina/PR">
+        </div>
+        <div class="field">
+          <label for="fValor">Valor (R$)</label>
+          <input type="number" id="fValor" step="0.01" min="0" placeholder="0,00" required>
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" class="ghost" id="cancelEdit" style="display:none;">Cancelar edição</button>
+        <button type="submit" id="submitBtn">Adicionar despesa</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="panel" style="padding:0;overflow:hidden;">
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Colaborador</th>
+          <th>Categoria</th>
+          <th>Descrição</th>
+          <th class="value">Valor</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+      </tbody>
+    </table>
+    <div class="empty" id="emptyState" style="display:none;">
+      Nenhuma despesa lançada ainda. Use o formulário acima para registrar a primeira parada da rota.
+    </div>
+  </div>
+
+  <footer>
+    <div class="status" id="statusLine">Carregando dados salvos…</div>
+    <div style="display:flex;gap:14px;">
+      <button class="ghost" id="exportCsv" type="button">Exportar CSV</button>
+      <button class="ghost" id="printBtn" type="button">Imprimir relatório</button>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  const STORAGE_KEY = 'ab-chemicals-expenses:v1';
+  const form = document.getElementById('expenseForm');
+  const tableBody = document.getElementById('tableBody');
+  const emptyState = document.getElementById('emptyState');
+  const statusLine = document.getElementById('statusLine');
+  const cancelEditBtn = document.getElementById('cancelEdit');
+  const submitBtn = document.getElementById('submitBtn');
+
+  let expenses = [];
+  let editingId = null;
+
+  function uid(){
+    return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  }
+
+  function fmtBRL(n){
+    return n.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+  }
+
+  function fmtDate(d){
+    const [y,m,day] = d.split('-');
+    return day+'/'+m+'/'+y;
+  }
+
+  async function loadExpenses(){
+    try{
+      const result = await window.storage.get(STORAGE_KEY, false);
+      expenses = result && result.value ? JSON.parse(result.value) : [];
+    }catch(err){
+      expenses = [];
+    }
+    render();
+    statusLine.textContent = 'Dados salvos automaticamente neste dispositivo.';
+  }
+
+  async function saveExpenses(){
+    try{
+      const result = await window.storage.set(STORAGE_KEY, JSON.stringify(expenses), false);
+      if(!result){
+        statusLine.textContent = 'Não foi possível salvar — tente novamente.';
+        return;
+      }
+      statusLine.textContent = 'Salvo · ' + new Date().toLocaleTimeString('pt-BR');
+    }catch(err){
+      statusLine.textContent = 'Erro ao salvar os dados.';
+    }
+  }
+
+  function renderRouteRail(count){
+    const rail = document.getElementById('routeRail');
+    rail.innerHTML = '';
+    const stops = Math.max(1, Math.min(count, 8) || 1);
+    for(let i=0;i<stops;i++){
+      const s = document.createElement('div');
+      s.className = 'stop';
+      rail.appendChild(s);
+    }
+  }
+
+  function renderSummary(){
+    document.getElementById('sumCount').textContent = expenses.length;
+
+    const total = expenses.reduce((acc,e)=>acc+Number(e.valor||0),0);
+    document.getElementById('sumTotal').textContent = fmtBRL(total);
+
+    const byCat = {};
+    expenses.forEach(e=>{ byCat[e.categoria] = (byCat[e.categoria]||0) + Number(e.valor||0); });
+    const topCat = Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a])[0];
+    document.getElementById('sumTopCat').textContent = topCat || '—';
+
+    if(expenses.length){
+      const dates = expenses.map(e=>e.data).sort();
+      const first = fmtDate(dates[0]);
+      const last = fmtDate(dates[dates.length-1]);
+      document.getElementById('sumPeriod').textContent = first === last ? first : first+' – '+last;
+    } else {
+      document.getElementById('sumPeriod').textContent = '—';
+    }
+
+    renderRouteRail(expenses.length);
+  }
+
+  function renderManifest(){
+    let id = expenses.reduce((max,e)=> e.seq && e.seq>max ? e.seq : max, 0);
+    document.getElementById('manifestId').textContent = String(id || expenses.length).padStart(4,'0');
+    document.getElementById('issuedAt').textContent = new Date().toLocaleDateString('pt-BR');
+  }
+
+  function render(){
+    tableBody.innerHTML = '';
+    const sorted = [...expenses].sort((a,b)=> a.data < b.data ? 1 : -1);
+
+    if(sorted.length === 0){
+      emptyState.style.display = 'block';
+    } else {
+      emptyState.style.display = 'none';
+      sorted.forEach(e=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td data-label="Data">${fmtDate(e.data)}</td>
+          <td data-label="Colaborador">${escapeHtml(e.colaborador)}</td>
+          <td data-label="Categoria"><span class="cat-tag">${escapeHtml(e.categoria)}</span></td>
+          <td data-label="Descrição">${escapeHtml(e.descricao||'—')}</td>
+          <td data-label="Valor" class="value">${fmtBRL(Number(e.valor))}</td>
+          <td class="row-actions">
+            <button type="button" data-action="edit" data-id="${e.id}">Editar</button>
+            <button type="button" data-action="delete" data-id="${e.id}">Excluir</button>
+          </td>
+        `;
+        tableBody.appendChild(tr);
+      });
+    }
+
+    renderSummary();
+    renderManifest();
+  }
+
+  function escapeHtml(str){
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  form.addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    const data = document.getElementById('fData').value;
+    const colaborador = document.getElementById('fColaborador').value.trim();
+    const categoria = document.getElementById('fCategoria').value;
+    const descricao = document.getElementById('fDescricao').value.trim();
+    const valor = parseFloat(document.getElementById('fValor').value);
+
+    if(!data || !colaborador || isNaN(valor)) return;
+
+    if(editingId){
+      const idx = expenses.findIndex(e=>e.id===editingId);
+      if(idx > -1){
+        expenses[idx] = { ...expenses[idx], data, colaborador, categoria, descricao, valor };
+      }
+      editingId = null;
+      cancelEditBtn.style.display = 'none';
+      submitBtn.textContent = 'Adicionar despesa';
+    } else {
+      const seq = expenses.length ? Math.max(...expenses.map(e=>e.seq||0)) + 1 : 1;
+      expenses.push({ id: uid(), seq, data, colaborador, categoria, descricao, valor });
+    }
+
+    form.reset();
+    render();
+    await saveExpenses();
+  });
+
+  cancelEditBtn.addEventListener('click', function(){
+    editingId = null;
+    form.reset();
+    cancelEditBtn.style.display = 'none';
+    submitBtn.textContent = 'Adicionar despesa';
+  });
+
+  tableBody.addEventListener('click', async function(ev){
+    const btn = ev.target.closest('button[data-action]');
+    if(!btn) return;
+    const id = btn.getAttribute('data-id');
+    const action = btn.getAttribute('data-action');
+
+    if(action === 'delete'){
+      expenses = expenses.filter(e=>e.id !== id);
+      render();
+      await saveExpenses();
+    }
+
+    if(action === 'edit'){
+      const e = expenses.find(e=>e.id===id);
+      if(!e) return;
+      document.getElementById('fData').value = e.data;
+      document.getElementById('fColaborador').value = e.colaborador;
+      document.getElementById('fCategoria').value = e.categoria;
+      document.getElementById('fDescricao').value = e.descricao || '';
+      document.getElementById('fValor').value = e.valor;
+      editingId = id;
+      cancelEditBtn.style.display = 'inline-block';
+      submitBtn.textContent = 'Salvar alterações';
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+  });
+
+  document.getElementById('exportCsv').addEventListener('click', function(){
+    if(expenses.length === 0) return;
+    const header = ['Data','Colaborador','Categoria','Descrição','Valor'];
+    const rows = [...expenses].sort((a,b)=> a.data < b.data ? -1 : 1).map(e=>[
+      fmtDate(e.data), e.colaborador, e.categoria, (e.descricao||'').replace(/;/g,','), Number(e.valor).toFixed(2).replace('.',',')
+    ]);
+    const csv = [header, ...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
+    const blob = new Blob(['\ufeff'+csv], { type:'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ab-chemicals-despesas-viagem.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById('printBtn').addEventListener('click', function(){
+    window.print();
+  });
+
+  document.getElementById('fData').valueAsDate = new Date();
+
+  loadExpenses();
+})();
+</script>
+</body>
+</html>
