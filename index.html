@@ -165,6 +165,11 @@
     outline-offset:1px;
     background:#fff;
   }
+  input[readonly]{
+    background:var(--teal-soft);
+    color:var(--ink-soft);
+    cursor:not-allowed;
+  }
   textarea{resize:vertical;min-height:44px;}
   .actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap;}
   button{
@@ -213,6 +218,8 @@
     background:var(--paper);
   }
   .photo-status{font-size:12px;color:var(--ink-soft);}
+  #saveStatus.danger{color:var(--danger);font-weight:600;}
+  #saveStatus.ok{color:var(--teal-deep);font-weight:600;}
 
   /* ---- ledger table ---- */
   table{width:100%;border-collapse:collapse;background:#fff;}
@@ -402,6 +409,17 @@
     padding:26px 28px;
   }
 
+  .login-overlay{
+    display:flex;
+    position:fixed;inset:0;
+    background:var(--paper);
+    z-index:200;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .login-overlay.hidden{display:none;}
+
   @media (max-width: 720px){
     .grid{grid-template-columns:1fr 1fr;}
     .field.span2, .field.span3{grid-column:span 2;}
@@ -420,7 +438,33 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="login-overlay" id="loginOverlay">
+  <div class="review-card">
+    <div class="brand" style="margin-bottom:18px;">
+      <div class="brand-mark">AB</div>
+      <div>
+        <h1 style="font-family:'Space Grotesk',sans-serif;font-size:18px;margin:0;">AB Chemicals</h1>
+        <p style="margin:2px 0 0;font-size:12px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.3px;">Relatório de despesas de viagem</p>
+      </div>
+    </div>
+    <form id="loginForm">
+      <div class="field" style="margin-bottom:14px;">
+        <label for="loginEmail">E-mail</label>
+        <input type="email" id="loginEmail" placeholder="seuemail@abchemicals.com" required autocomplete="username">
+      </div>
+      <div class="field" style="margin-bottom:16px;">
+        <label for="loginPassword">Senha</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <div id="loginError" style="display:none;color:var(--danger);font-size:13px;font-weight:600;margin-bottom:14px;"></div>
+      <div class="actions" style="justify-content:flex-start;">
+        <button type="submit" id="loginBtn">Entrar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="wrap" id="appWrap" style="display:none;">
 
   <header>
     <div class="brand">
@@ -432,7 +476,8 @@
     </div>
     <div class="manifest-id">
       Manifesto Nº <span class="num" id="manifestId">—</span><br>
-      Emitido em <span id="issuedAt">—</span>
+      Emitido em <span id="issuedAt">—</span><br>
+      <a href="#" id="logoutLink" style="color:var(--teal);text-decoration:underline;">Sair (<span id="loggedInAs"></span>)</a>
     </div>
   </header>
 
@@ -525,6 +570,27 @@
     </form>
   </div>
 
+  <div class="panel" id="adminPanel" style="display:none;">
+    <h2>Cadastrar novo usuário (admin)</h2>
+    <form id="adminForm">
+      <div class="grid">
+        <div class="field span2">
+          <label for="aEmail">E-mail do colaborador</label>
+          <input type="email" id="aEmail" placeholder="colaborador@abchemicals.com" required>
+        </div>
+        <div class="field">
+          <label for="aSenha">Senha provisória</label>
+          <input type="text" id="aSenha" placeholder="mínimo 6 caracteres" minlength="6" required>
+        </div>
+      </div>
+      <div class="actions">
+        <span class="photo-status" id="adminStatus"></span>
+        <button type="submit" id="adminSubmitBtn">Cadastrar usuário</button>
+      </div>
+    </form>
+    <div id="userList" style="margin-top:16px;font-size:13px;color:var(--ink-soft);"></div>
+  </div>
+
   <div class="panel" style="padding:0;overflow:hidden;">
     <table>
       <thead>
@@ -585,14 +651,17 @@
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc,
-  doc, onSnapshot, serverTimestamp, query, orderBy, setDoc
+  doc, onSnapshot, serverTimestamp, query, orderBy, setDoc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import {
   getStorage, ref, uploadString, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCteNyGlV3QrO6YgCkuBmvJrXQOIeA9dNc",
@@ -606,7 +675,10 @@ const firebaseConfig = {
 const app     = initializeApp(firebaseConfig);
 const db      = getFirestore(app);
 const storage = getStorage(app);
+const auth    = getAuth(app);
 const COL     = "despesas_viagem";
+
+const ADMIN_EMAILS = ["abchemicalspr@gmail.com"];
 
 window._fb = {
   listen(cb){
@@ -657,6 +729,41 @@ window._fb = {
       comentario: comentario || null,
       decididoEm: serverTimestamp()
     }, { merge: true });
+  },
+  onAuthChange(cb){
+    return onAuthStateChanged(auth, cb);
+  },
+  async login(email, password){
+    return await signInWithEmailAndPassword(auth, email, password);
+  },
+  async logout(){
+    return await signOut(auth);
+  },
+  isAdmin(email){
+    return ADMIN_EMAILS.includes((email||'').toLowerCase());
+  },
+  async createUser(email, password, criadoPor){
+    // instância secundária: cria o usuário sem derrubar a sessão do admin logado
+    const secondaryApp = initializeApp(firebaseConfig, "Secondary-" + Date.now());
+    const secondaryAuth = getAuth(secondaryApp);
+    try{
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+      await signOut(secondaryAuth);
+      await setDoc(doc(db, "colaboradores", cred.user.uid), {
+        email,
+        criadoPor,
+        criadoEm: serverTimestamp()
+      });
+    } finally {
+      await deleteApp(secondaryApp);
+    }
+  },
+  listenUsers(cb){
+    return onSnapshot(collection(db, "colaboradores"), snap=>{
+      const items = [];
+      snap.forEach(d=> items.push({ id: d.id, ...d.data() }));
+      cb(items);
+    });
   }
 };
 </script>
@@ -689,6 +796,11 @@ window._fb = {
   let pendingPhotoDataUrl = null;
   let unsubscribe = null;
   let unsubscribeReports = null;
+  let currentUserLabel = '';
+
+  function restoreColaborador(){
+    document.getElementById('fColaborador').value = currentUserLabel;
+  }
   let selectedMonth = monthKeyOf(new Date().toISOString().slice(0,10)); // 'YYYY-MM'
 
   function monthKeyOf(dateStr){
@@ -969,11 +1081,17 @@ window._fb = {
       if(editingId){
         const updates = { data, colaborador, categoria, descricao, valor };
         if(pendingPhotoDataUrl){
-          const existing = expenses.find(x=>x.id===editingId);
-          if(existing && existing.reciboPath) await fb.deleteReceipt(existing.reciboPath);
-          const { url, path } = await fb.uploadReceipt(editingId, pendingPhotoDataUrl);
-          updates.reciboUrl = url;
-          updates.reciboPath = path;
+          try{
+            const existing = expenses.find(x=>x.id===editingId);
+            if(existing && existing.reciboPath) await fb.deleteReceipt(existing.reciboPath);
+            const { url, path } = await fb.uploadReceipt(editingId, pendingPhotoDataUrl);
+            updates.reciboUrl = url;
+            updates.reciboPath = path;
+          }catch(photoErr){
+            console.error('Falha no upload da foto:', photoErr);
+            saveStatus.className = 'photo-status danger';
+            saveStatus.textContent = 'Despesa salva, mas a foto falhou: ' + (photoErr.code || photoErr.message || photoErr);
+          }
         }
         await fb.update(editingId, updates);
         editingId = null;
@@ -982,17 +1100,28 @@ window._fb = {
       } else {
         const docRef = await fb.add({ data, colaborador, categoria, descricao, valor, reciboUrl: null, reciboPath: null });
         if(pendingPhotoDataUrl){
-          const { url, path } = await fb.uploadReceipt(docRef.id, pendingPhotoDataUrl);
-          await fb.update(docRef.id, { reciboUrl: url, reciboPath: path });
+          try{
+            const { url, path } = await fb.uploadReceipt(docRef.id, pendingPhotoDataUrl);
+            await fb.update(docRef.id, { reciboUrl: url, reciboPath: path });
+          }catch(photoErr){
+            console.error('Falha no upload da foto:', photoErr);
+            saveStatus.className = 'photo-status danger';
+            saveStatus.textContent = 'Despesa salva, mas a foto falhou: ' + (photoErr.code || photoErr.message || photoErr);
+          }
         }
       }
       form.reset();
       resetPhotoField();
+      restoreColaborador();
       document.getElementById('fData').valueAsDate = new Date();
-      saveStatus.textContent = 'Salvo';
-      setTimeout(()=>{ saveStatus.textContent=''; }, 2000);
+      if(!saveStatus.textContent){
+        saveStatus.className = 'photo-status ok';
+        saveStatus.textContent = 'Salvo';
+        setTimeout(()=>{ saveStatus.textContent=''; saveStatus.className='photo-status'; }, 2500);
+      }
     }catch(err){
-      saveStatus.textContent = 'Erro ao salvar — tente novamente';
+      saveStatus.className = 'photo-status danger';
+      saveStatus.textContent = 'Erro ao salvar: ' + (err.code || err.message || err);
       console.error(err);
     }finally{
       submitBtn.disabled = false;
@@ -1003,6 +1132,7 @@ window._fb = {
     editingId = null;
     form.reset();
     resetPhotoField();
+    restoreColaborador();
     cancelEditBtn.style.display = 'none';
     submitBtn.textContent = 'Adicionar despesa';
   });
@@ -1138,7 +1268,140 @@ window._fb = {
 
   document.getElementById('fData').valueAsDate = new Date();
 
-  init();
+  const loginOverlay = document.getElementById('loginOverlay');
+  const appWrap = document.getElementById('appWrap');
+  const loginForm = document.getElementById('loginForm');
+  const loginError = document.getElementById('loginError');
+  const loginBtn = document.getElementById('loginBtn');
+  const fColaborador = document.getElementById('fColaborador');
+  let initialized = false;
+  let usersInitialized = false;
+  let isLoggedIn = false;
+  let idleTimer = null;
+  let autoLoggedOut = false;
+  const IDLE_LIMIT_MS = 10 * 60 * 1000;
+
+  function resetIdleTimer(){
+    if(!isLoggedIn) return;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(handleIdleLogout, IDLE_LIMIT_MS);
+  }
+
+  async function handleIdleLogout(){
+    if(!isLoggedIn) return;
+    autoLoggedOut = true;
+    const fb = await waitForFb();
+    await fb.logout();
+  }
+
+  ['mousemove','keydown','click','scroll','touchstart'].forEach(evt=>{
+    document.addEventListener(evt, resetIdleTimer, { passive:true });
+  });
+
+  loginForm.addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Entrando…';
+    loginError.style.display = 'none';
+    try{
+      const fb = await waitForFb();
+      await fb.login(email, password);
+    }catch(err){
+      loginError.textContent = 'Não foi possível entrar. Confira o e-mail e a senha.';
+      loginError.style.display = 'block';
+      console.error(err);
+    }finally{
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Entrar';
+    }
+  });
+
+  document.getElementById('logoutLink').addEventListener('click', async function(ev){
+    ev.preventDefault();
+    const fb = await waitForFb();
+    await fb.logout();
+  });
+
+  (async function(){
+    const fb = await waitForFb();
+    fb.onAuthChange(function(user){
+      if(user){
+        loginOverlay.classList.add('hidden');
+        appWrap.style.display = '';
+        document.getElementById('loggedInAs').textContent = user.email;
+        currentUserLabel = user.displayName || user.email;
+        restoreColaborador();
+        fColaborador.readOnly = true;
+        isLoggedIn = true;
+        resetIdleTimer();
+
+        if(fb.isAdmin(user.email)){
+          document.getElementById('adminPanel').style.display = 'block';
+          if(!usersInitialized){
+            usersInitialized = true;
+            fb.listenUsers(renderUserList);
+          }
+        } else {
+          document.getElementById('adminPanel').style.display = 'none';
+        }
+
+        if(!initialized){
+          initialized = true;
+          init();
+        }
+      } else {
+        isLoggedIn = false;
+        clearTimeout(idleTimer);
+        appWrap.style.display = 'none';
+        document.getElementById('reviewOverlay').classList.remove('open');
+        loginOverlay.classList.remove('hidden');
+        if(autoLoggedOut){
+          loginError.textContent = 'Sessão encerrada por inatividade (10 minutos). Faça login novamente.';
+          loginError.style.display = 'block';
+          autoLoggedOut = false;
+        }
+      }
+    });
+  })();
+
+  document.getElementById('adminForm').addEventListener('submit', async function(ev){
+    ev.preventDefault();
+    const email = document.getElementById('aEmail').value.trim();
+    const senha = document.getElementById('aSenha').value;
+    const adminStatus = document.getElementById('adminStatus');
+    const adminSubmitBtn = document.getElementById('adminSubmitBtn');
+    adminSubmitBtn.disabled = true;
+    adminStatus.className = 'photo-status';
+    adminStatus.textContent = 'Cadastrando…';
+    try{
+      const fb = await waitForFb();
+      await fb.createUser(email, senha, currentUserLabel);
+      adminStatus.className = 'photo-status ok';
+      adminStatus.textContent = 'Usuário cadastrado com sucesso.';
+      document.getElementById('adminForm').reset();
+      setTimeout(()=>{ adminStatus.textContent=''; adminStatus.className='photo-status'; }, 3000);
+    }catch(err){
+      console.error(err);
+      adminStatus.className = 'photo-status danger';
+      adminStatus.textContent = 'Erro: ' + (err.code || err.message || err);
+    }finally{
+      adminSubmitBtn.disabled = false;
+    }
+  });
+
+  function renderUserList(list){
+    const box = document.getElementById('userList');
+    if(list.length === 0){
+      box.textContent = 'Nenhum usuário cadastrado por aqui ainda.';
+      return;
+    }
+    const sorted = [...list].sort((a,b)=> (a.email||'').localeCompare(b.email||''));
+    box.innerHTML = '<strong>Usuários cadastrados nesta plataforma:</strong><br>' +
+      sorted.map(u => escapeHtml(u.email) + (u.criadoPor ? ' — cadastrado por ' + escapeHtml(u.criadoPor) : '')).join('<br>');
+  }
+
 })();
 </script>
 </body>
