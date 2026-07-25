@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <style>
   :root{
     --teal-deep:#163832;
@@ -481,6 +482,8 @@
     </div>
   </header>
 
+  <div id="sellerView">
+
   <div class="route-rail" id="routeRail"></div>
 
   <div class="month-bar">
@@ -570,27 +573,6 @@
     </form>
   </div>
 
-  <div class="panel" id="adminPanel" style="display:none;">
-    <h2>Cadastrar novo usuário (admin)</h2>
-    <form id="adminForm">
-      <div class="grid">
-        <div class="field span2">
-          <label for="aEmail">E-mail do colaborador</label>
-          <input type="email" id="aEmail" placeholder="colaborador@abchemicals.com" required>
-        </div>
-        <div class="field">
-          <label for="aSenha">Senha provisória</label>
-          <input type="text" id="aSenha" placeholder="mínimo 6 caracteres" minlength="6" required>
-        </div>
-      </div>
-      <div class="actions">
-        <span class="photo-status" id="adminStatus"></span>
-        <button type="submit" id="adminSubmitBtn">Cadastrar usuário</button>
-      </div>
-    </form>
-    <div id="userList" style="margin-top:16px;font-size:13px;color:var(--ink-soft);"></div>
-  </div>
-
   <div class="panel" style="padding:0;overflow:hidden;">
     <table>
       <thead>
@@ -619,6 +601,47 @@
       <button class="ghost" id="printBtn" type="button">Imprimir relatório</button>
     </div>
   </footer>
+
+  </div>
+
+  <div id="adminDashboardView" style="display:none;">
+
+    <div class="panel">
+      <h2>Cadastrar novo usuário</h2>
+      <form id="adminForm">
+        <div class="grid">
+          <div class="field span2">
+            <label for="aEmail">E-mail do colaborador</label>
+            <input type="email" id="aEmail" placeholder="colaborador@abchemicals.com" required>
+          </div>
+          <div class="field">
+            <label for="aSenha">Senha provisória</label>
+            <input type="text" id="aSenha" placeholder="mínimo 6 caracteres" minlength="6" required>
+          </div>
+        </div>
+        <div class="actions">
+          <span class="photo-status" id="adminStatus"></span>
+          <button type="submit" id="adminSubmitBtn">Cadastrar usuário</button>
+        </div>
+      </form>
+      <div id="userList" style="margin-top:16px;font-size:13px;color:var(--ink-soft);"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Aprovações pendentes</h2>
+      <div id="approvalsList"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Despesas mensais por colaborador</h2>
+      <canvas id="expenseChart" height="110"></canvas>
+    </div>
+
+    <footer>
+      <div class="status" id="statusLineAdmin">Conectando ao banco de dados…</div>
+    </footer>
+
+  </div>
 
 </div>
 
@@ -868,15 +891,102 @@ window._fb = {
   async function init(){
     const fb = await waitForFb();
     statusLine.textContent = 'Conectado ao Firebase · sincronizando em tempo real';
+    const statusLineAdmin = document.getElementById('statusLineAdmin');
+    if(statusLineAdmin) statusLineAdmin.textContent = 'Conectado ao Firebase · sincronizando em tempo real';
     unsubscribe = fb.listen(items=>{
       expenses = items;
       render();
       renderReviewScreen();
+      renderAdminDashboard();
     });
     unsubscribeReports = fb.listenReports(map=>{
       reportsByMonth = map;
       render();
       renderReviewScreen();
+      renderAdminDashboard();
+    });
+  }
+
+  function renderAdminDashboard(){
+    if(!isAdminUser) return;
+    renderApprovalsList();
+    renderExpenseChart();
+  }
+
+  function renderApprovalsList(){
+    const box = document.getElementById('approvalsList');
+    const entries = Object.entries(reportsByMonth).filter(([k,v])=> v.status === 'enviado');
+    if(entries.length === 0){
+      box.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;">Nenhum relatório pendente de aprovação.</p>';
+      return;
+    }
+    entries.sort((a,b)=> a[0] < b[0] ? 1 : -1);
+    box.innerHTML = entries.map(([monthKey, r]) => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:10px;">
+        <div>
+          <strong>${monthLabel(monthKey)}</strong><br>
+          <span style="font-size:12.5px;color:var(--ink-soft);">${escapeHtml(r.colaboradores||'—')} · ${r.quantidade||0} lançamento(s) · ${fmtBRL(Number(r.totalDespesas||0))}</span>
+        </div>
+        <div>
+          <button type="button" class="approve-inline" data-month="${monthKey}" style="background:var(--teal);border-color:var(--teal);margin-right:8px;">Aprovar</button>
+          <button type="button" class="reject-inline" data-month="${monthKey}" style="background:var(--danger);border-color:var(--danger);">Reprovar</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('approvalsList').addEventListener('click', async function(ev){
+    const approveBtn = ev.target.closest('.approve-inline');
+    const rejectBtn = ev.target.closest('.reject-inline');
+    const btn = approveBtn || rejectBtn;
+    if(!btn) return;
+    const monthKey = btn.getAttribute('data-month');
+    const status = approveBtn ? 'aprovado' : 'reprovado';
+    btn.disabled = true;
+    try{
+      const fb = await waitForFb();
+      await fb.updateReportStatus(monthKey, status, null);
+    }catch(err){
+      console.error(err);
+      alert('Erro ao atualizar o status do relatório.');
+      btn.disabled = false;
+    }
+  });
+
+  const CHART_PALETTE = ['#1E5A4E','#D98E2B','#5C6660','#8AA69C','#B4462C','#3E7A6B','#C9A227','#274B41'];
+  let chartInstance = null;
+
+  function renderExpenseChart(){
+    const canvas = document.getElementById('expenseChart');
+    if(!canvas || typeof Chart === 'undefined') return;
+
+    const months = [...new Set(expenses.map(e=>monthKeyOf(e.data)).filter(Boolean))].sort();
+    const colaboradores = [...new Set(expenses.map(e=>e.colaborador).filter(Boolean))];
+
+    if(months.length === 0 || colaboradores.length === 0){
+      if(chartInstance){ chartInstance.destroy(); chartInstance = null; }
+      return;
+    }
+
+    const datasets = colaboradores.map((col, idx) => ({
+      label: col,
+      backgroundColor: CHART_PALETTE[idx % CHART_PALETTE.length],
+      data: months.map(m => expenses
+        .filter(e => e.colaborador === col && monthKeyOf(e.data) === m)
+        .reduce((acc,e)=>acc+Number(e.valor||0), 0))
+    }));
+
+    const labels = months.map(m => monthLabel(m));
+
+    if(chartInstance) chartInstance.destroy();
+    chartInstance = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true } },
+        plugins: { legend: { position: 'bottom' } }
+      }
     });
   }
 
@@ -1223,7 +1333,7 @@ window._fb = {
     const sorted = [...list].sort((a,b)=> a.data < b.data ? -1 : 1);
     const linhasItens = sorted.map(e =>
       fmtDate(e.data) + ' | ' + e.colaborador + ' | ' + e.categoria + ' | ' + (e.descricao || '—') + ' | ' + fmtBRL(Number(e.valor))
-      + (e.reciboUrl ? ' | recibo: ' + e.reciboUrl : '')
+      + (e.reciboUrl ? ' | <a href="' + e.reciboUrl + '">imagem do recibo</a>' : '')
     ).join('\n');
 
     const reviewLink = window.location.origin + window.location.pathname + '?revisar=' + selectedMonth;
@@ -1276,6 +1386,7 @@ window._fb = {
   const fColaborador = document.getElementById('fColaborador');
   let initialized = false;
   let usersInitialized = false;
+  let isAdminUser = false;
   let isLoggedIn = false;
   let idleTimer = null;
   let autoLoggedOut = false;
@@ -1338,13 +1449,17 @@ window._fb = {
         resetIdleTimer();
 
         if(fb.isAdmin(user.email)){
-          document.getElementById('adminPanel').style.display = 'block';
+          isAdminUser = true;
+          document.getElementById('sellerView').style.display = 'none';
+          document.getElementById('adminDashboardView').style.display = '';
           if(!usersInitialized){
             usersInitialized = true;
             fb.listenUsers(renderUserList);
           }
         } else {
-          document.getElementById('adminPanel').style.display = 'none';
+          isAdminUser = false;
+          document.getElementById('sellerView').style.display = '';
+          document.getElementById('adminDashboardView').style.display = 'none';
         }
 
         if(!initialized){
