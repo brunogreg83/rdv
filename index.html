@@ -165,7 +165,7 @@
     background:#fff;
   }
   textarea{resize:vertical;min-height:44px;}
-  .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px;}
+  .actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap;}
   button{
     font-family:'IBM Plex Sans',sans-serif;
     font-size:13.5px;
@@ -180,7 +180,38 @@
   }
   button.ghost{background:transparent;color:var(--teal-deep);}
   button:hover{opacity:.88;}
+  button:disabled{opacity:.5;cursor:not-allowed;}
   button:focus-visible, input:focus-visible, select:focus-visible{outline:2px solid var(--amber);}
+
+  /* ---- receipt photo capture ---- */
+  .photo-field{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .photo-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:9px 14px;
+    border:1px dashed var(--teal);
+    border-radius:var(--radius);
+    background:var(--teal-soft);
+    color:var(--teal-deep);
+    font-size:13px;
+    font-weight:500;
+    cursor:pointer;
+  }
+  .photo-btn input{display:none;}
+  .photo-preview{
+    width:46px;height:46px;
+    object-fit:cover;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    display:none;
+    background:var(--paper);
+  }
+  .photo-status{font-size:12px;color:var(--ink-soft);}
 
   /* ---- ledger table ---- */
   table{width:100%;border-collapse:collapse;background:#fff;}
@@ -197,7 +228,7 @@
     padding:11px 12px;
     border-bottom:1px solid var(--line);
     font-size:13.5px;
-    vertical-align:top;
+    vertical-align:middle;
   }
   tbody tr:hover{background:var(--teal-soft);}
   td.value, th.value{font-family:'IBM Plex Mono',monospace;text-align:right;white-space:nowrap;}
@@ -208,6 +239,18 @@
     border:1px solid var(--teal);
     color:var(--teal-deep);
     border-radius:20px;
+  }
+  .thumb{
+    width:36px;height:36px;
+    object-fit:cover;
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    cursor:pointer;
+    display:block;
+  }
+  .thumb-empty{
+    font-size:11px;
+    color:var(--ink-soft);
   }
   .row-actions{white-space:nowrap;}
   .row-actions button{
@@ -238,6 +281,35 @@
   }
   .status{font-family:'IBM Plex Mono',monospace;}
 
+  /* ---- receipt viewer modal ---- */
+  .modal-overlay{
+    position:fixed;inset:0;
+    background:rgba(20,26,22,.82);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    z-index:50;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal-overlay img{
+    max-width:min(90vw,720px);
+    max-height:86vh;
+    border:3px solid #fff;
+    border-radius:2px;
+  }
+  .modal-close{
+    position:absolute;
+    top:20px;right:24px;
+    background:#fff;
+    color:var(--ink);
+    border:none;
+    width:36px;height:36px;
+    border-radius:50%;
+    font-size:16px;
+    cursor:pointer;
+  }
+
   @media (max-width: 720px){
     .grid{grid-template-columns:1fr 1fr;}
     .field.span2, .field.span3{grid-column:span 2;}
@@ -245,17 +317,13 @@
     table, thead, tbody, tr, td, th{display:block;}
     thead{display:none;}
     tbody tr{border-bottom:2px solid var(--line);padding:10px 0;}
-    tbody td{border:none;padding:4px 12px;display:flex;justify-content:space-between;gap:10px;}
+    tbody td{border:none;padding:4px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
     tbody td::before{content:attr(data-label);color:var(--ink-soft);font-size:11px;text-transform:uppercase;}
   }
 
   @media print{
-    .panel.form, .actions, .row-actions, footer .hint{display:none !important;}
+    .panel.form, .actions, .row-actions, footer .hint, .modal-overlay{display:none !important;}
     body{background:#fff;}
-  }
-
-  @media (prefers-reduced-motion: no-preference){
-    .panel, .summary .card{transition:box-shadow .15s ease;}
   }
 </style>
 </head>
@@ -328,8 +396,20 @@
           <label for="fValor">Valor (R$)</label>
           <input type="number" id="fValor" step="0.01" min="0" placeholder="0,00" required>
         </div>
+        <div class="field span3">
+          <label>Foto do recibo</label>
+          <div class="photo-field">
+            <label class="photo-btn">
+              📷 Tirar foto / anexar recibo
+              <input type="file" id="fFoto" accept="image/*" capture="environment">
+            </label>
+            <img id="fotoPreview" class="photo-preview" alt="Pré-visualização do recibo">
+            <span class="photo-status" id="fotoStatus"></span>
+          </div>
+        </div>
       </div>
       <div class="actions">
+        <span class="photo-status" id="saveStatus"></span>
         <button type="button" class="ghost" id="cancelEdit" style="display:none;">Cancelar edição</button>
         <button type="submit" id="submitBtn">Adicionar despesa</button>
       </div>
@@ -344,6 +424,7 @@
           <th>Colaborador</th>
           <th>Categoria</th>
           <th>Descrição</th>
+          <th>Recibo</th>
           <th class="value">Valor</th>
           <th></th>
         </tr>
@@ -357,7 +438,7 @@
   </div>
 
   <footer>
-    <div class="status" id="statusLine">Carregando dados salvos…</div>
+    <div class="status" id="statusLine">Conectando ao banco de dados…</div>
     <div style="display:flex;gap:14px;">
       <button class="ghost" id="exportCsv" type="button">Exportar CSV</button>
       <button class="ghost" id="printBtn" type="button">Imprimir relatório</button>
@@ -366,55 +447,128 @@
 
 </div>
 
+<div class="modal-overlay" id="photoModal">
+  <button class="modal-close" id="modalClose">✕</button>
+  <img id="modalImg" alt="Recibo ampliado">
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, updateDoc, deleteDoc,
+  doc, onSnapshot, serverTimestamp, query, orderBy
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getStorage, ref, uploadString, getDownloadURL, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCteNyGlV3QrO6YgCkuBmvJrXQOIeA9dNc",
+  authDomain: "rdv-nf-35e17.firebaseapp.com",
+  projectId: "rdv-nf-35e17",
+  storageBucket: "rdv-nf-35e17.firebasestorage.app",
+  messagingSenderId: "644639016024",
+  appId: "1:644639016024:web:c1f1881cf30dfff14b762d"
+};
+
+const app     = initializeApp(firebaseConfig);
+const db      = getFirestore(app);
+const storage = getStorage(app);
+const COL     = "despesas_viagem";
+
+window._fb = {
+  listen(cb){
+    const q = query(collection(db, COL), orderBy("data", "desc"));
+    return onSnapshot(q, snap=>{
+      const items = [];
+      snap.forEach(d=> items.push({ id: d.id, ...d.data() }));
+      cb(items);
+    });
+  },
+  async add(data){
+    return await addDoc(collection(db, COL), { ...data, criadoEm: serverTimestamp() });
+  },
+  async update(id, data){
+    return await updateDoc(doc(db, COL, id), data);
+  },
+  async remove(id){
+    return await deleteDoc(doc(db, COL, id));
+  },
+  async uploadReceipt(id, dataUrl){
+    const path = `recibos/${id}.jpg`;
+    const r = ref(storage, path);
+    await uploadString(r, dataUrl, "data_url");
+    const url = await getDownloadURL(r);
+    return { url, path };
+  },
+  async deleteReceipt(path){
+    if(!path) return;
+    try{ await deleteObject(ref(storage, path)); }catch(e){ /* já pode ter sido removido */ }
+  }
+};
+</script>
+
 <script>
 (function(){
-  const STORAGE_KEY = 'ab-chemicals-expenses:v1';
   const form = document.getElementById('expenseForm');
   const tableBody = document.getElementById('tableBody');
   const emptyState = document.getElementById('emptyState');
   const statusLine = document.getElementById('statusLine');
+  const saveStatus = document.getElementById('saveStatus');
   const cancelEditBtn = document.getElementById('cancelEdit');
   const submitBtn = document.getElementById('submitBtn');
+  const fFoto = document.getElementById('fFoto');
+  const fotoPreview = document.getElementById('fotoPreview');
+  const fotoStatus = document.getElementById('fotoStatus');
+  const modal = document.getElementById('photoModal');
+  const modalImg = document.getElementById('modalImg');
+  const modalClose = document.getElementById('modalClose');
 
   let expenses = [];
   let editingId = null;
-
-  function uid(){
-    return 'e' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
-  }
+  let pendingPhotoDataUrl = null;
+  let unsubscribe = null;
 
   function fmtBRL(n){
     return n.toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
   }
 
   function fmtDate(d){
-    const [y,m,day] = d.split('-');
+    const [y,m,day] = (d||'').split('-');
+    if(!y) return '—';
     return day+'/'+m+'/'+y;
   }
 
-  async function loadExpenses(){
-    try{
-      const result = await window.storage.get(STORAGE_KEY, false);
-      expenses = result && result.value ? JSON.parse(result.value) : [];
-    }catch(err){
-      expenses = [];
-    }
-    render();
-    statusLine.textContent = 'Dados salvos automaticamente neste dispositivo.';
+  function waitForFb(){
+    return new Promise(resolve=>{
+      if(window._fb) return resolve(window._fb);
+      const iv = setInterval(()=>{
+        if(window._fb){ clearInterval(iv); resolve(window._fb); }
+      }, 50);
+    });
   }
 
-  async function saveExpenses(){
-    try{
-      const result = await window.storage.set(STORAGE_KEY, JSON.stringify(expenses), false);
-      if(!result){
-        statusLine.textContent = 'Não foi possível salvar — tente novamente.';
-        return;
-      }
-      statusLine.textContent = 'Salvo · ' + new Date().toLocaleTimeString('pt-BR');
-    }catch(err){
-      statusLine.textContent = 'Erro ao salvar os dados.';
-    }
+  async function init(){
+    const fb = await waitForFb();
+    statusLine.textContent = 'Conectado ao Firebase · sincronizando em tempo real';
+    unsubscribe = fb.listen(items=>{
+      expenses = items;
+      render();
+    });
   }
+
+  fFoto.addEventListener('change', function(){
+    const file = fFoto.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e){
+      pendingPhotoDataUrl = e.target.result;
+      fotoPreview.src = pendingPhotoDataUrl;
+      fotoPreview.style.display = 'block';
+      fotoStatus.textContent = file.name;
+    };
+    reader.readAsDataURL(file);
+  });
 
   function renderRouteRail(count){
     const rail = document.getElementById('routeRail');
@@ -451,8 +605,7 @@
   }
 
   function renderManifest(){
-    let id = expenses.reduce((max,e)=> e.seq && e.seq>max ? e.seq : max, 0);
-    document.getElementById('manifestId').textContent = String(id || expenses.length).padStart(4,'0');
+    document.getElementById('manifestId').textContent = String(expenses.length).padStart(4,'0');
     document.getElementById('issuedAt').textContent = new Date().toLocaleDateString('pt-BR');
   }
 
@@ -466,11 +619,15 @@
       emptyState.style.display = 'none';
       sorted.forEach(e=>{
         const tr = document.createElement('tr');
+        const reciboCell = e.reciboUrl
+          ? `<img class="thumb" src="${e.reciboUrl}" data-full="${e.reciboUrl}" alt="Recibo de ${escapeHtml(e.colaborador)}">`
+          : `<span class="thumb-empty">—</span>`;
         tr.innerHTML = `
           <td data-label="Data">${fmtDate(e.data)}</td>
           <td data-label="Colaborador">${escapeHtml(e.colaborador)}</td>
           <td data-label="Categoria"><span class="cat-tag">${escapeHtml(e.categoria)}</span></td>
           <td data-label="Descrição">${escapeHtml(e.descricao||'—')}</td>
+          <td data-label="Recibo">${reciboCell}</td>
           <td data-label="Valor" class="value">${fmtBRL(Number(e.valor))}</td>
           <td class="row-actions">
             <button type="button" data-action="edit" data-id="${e.id}">Editar</button>
@@ -491,8 +648,17 @@
     return div.innerHTML;
   }
 
+  function resetPhotoField(){
+    pendingPhotoDataUrl = null;
+    fFoto.value = '';
+    fotoPreview.style.display = 'none';
+    fotoPreview.src = '';
+    fotoStatus.textContent = '';
+  }
+
   form.addEventListener('submit', async function(ev){
     ev.preventDefault();
+    const fb = await waitForFb();
     const data = document.getElementById('fData').value;
     const colaborador = document.getElementById('fColaborador').value.trim();
     const categoria = document.getElementById('fCategoria').value;
@@ -501,41 +667,69 @@
 
     if(!data || !colaborador || isNaN(valor)) return;
 
-    if(editingId){
-      const idx = expenses.findIndex(e=>e.id===editingId);
-      if(idx > -1){
-        expenses[idx] = { ...expenses[idx], data, colaborador, categoria, descricao, valor };
-      }
-      editingId = null;
-      cancelEditBtn.style.display = 'none';
-      submitBtn.textContent = 'Adicionar despesa';
-    } else {
-      const seq = expenses.length ? Math.max(...expenses.map(e=>e.seq||0)) + 1 : 1;
-      expenses.push({ id: uid(), seq, data, colaborador, categoria, descricao, valor });
-    }
+    submitBtn.disabled = true;
+    saveStatus.textContent = 'Salvando…';
 
-    form.reset();
-    render();
-    await saveExpenses();
+    try{
+      if(editingId){
+        const updates = { data, colaborador, categoria, descricao, valor };
+        if(pendingPhotoDataUrl){
+          const existing = expenses.find(x=>x.id===editingId);
+          if(existing && existing.reciboPath) await fb.deleteReceipt(existing.reciboPath);
+          const { url, path } = await fb.uploadReceipt(editingId, pendingPhotoDataUrl);
+          updates.reciboUrl = url;
+          updates.reciboPath = path;
+        }
+        await fb.update(editingId, updates);
+        editingId = null;
+        cancelEditBtn.style.display = 'none';
+        submitBtn.textContent = 'Adicionar despesa';
+      } else {
+        const docRef = await fb.add({ data, colaborador, categoria, descricao, valor, reciboUrl: null, reciboPath: null });
+        if(pendingPhotoDataUrl){
+          const { url, path } = await fb.uploadReceipt(docRef.id, pendingPhotoDataUrl);
+          await fb.update(docRef.id, { reciboUrl: url, reciboPath: path });
+        }
+      }
+      form.reset();
+      resetPhotoField();
+      document.getElementById('fData').valueAsDate = new Date();
+      saveStatus.textContent = 'Salvo';
+      setTimeout(()=>{ saveStatus.textContent=''; }, 2000);
+    }catch(err){
+      saveStatus.textContent = 'Erro ao salvar — tente novamente';
+      console.error(err);
+    }finally{
+      submitBtn.disabled = false;
+    }
   });
 
   cancelEditBtn.addEventListener('click', function(){
     editingId = null;
     form.reset();
+    resetPhotoField();
     cancelEditBtn.style.display = 'none';
     submitBtn.textContent = 'Adicionar despesa';
   });
 
   tableBody.addEventListener('click', async function(ev){
+    const thumb = ev.target.closest('img.thumb');
+    if(thumb){
+      modalImg.src = thumb.getAttribute('data-full');
+      modal.classList.add('open');
+      return;
+    }
+
     const btn = ev.target.closest('button[data-action]');
     if(!btn) return;
     const id = btn.getAttribute('data-id');
     const action = btn.getAttribute('data-action');
+    const fb = await waitForFb();
 
     if(action === 'delete'){
-      expenses = expenses.filter(e=>e.id !== id);
-      render();
-      await saveExpenses();
+      const e = expenses.find(e=>e.id===id);
+      if(e && e.reciboPath) await fb.deleteReceipt(e.reciboPath);
+      await fb.remove(id);
     }
 
     if(action === 'edit'){
@@ -546,6 +740,12 @@
       document.getElementById('fCategoria').value = e.categoria;
       document.getElementById('fDescricao').value = e.descricao || '';
       document.getElementById('fValor').value = e.valor;
+      resetPhotoField();
+      if(e.reciboUrl){
+        fotoPreview.src = e.reciboUrl;
+        fotoPreview.style.display = 'block';
+        fotoStatus.textContent = 'Recibo atual (escolha um novo arquivo para substituir)';
+      }
       editingId = id;
       cancelEditBtn.style.display = 'inline-block';
       submitBtn.textContent = 'Salvar alterações';
@@ -553,11 +753,14 @@
     }
   });
 
+  modalClose.addEventListener('click', ()=> modal.classList.remove('open'));
+  modal.addEventListener('click', (ev)=>{ if(ev.target === modal) modal.classList.remove('open'); });
+
   document.getElementById('exportCsv').addEventListener('click', function(){
     if(expenses.length === 0) return;
-    const header = ['Data','Colaborador','Categoria','Descrição','Valor'];
+    const header = ['Data','Colaborador','Categoria','Descrição','Valor','Link do recibo'];
     const rows = [...expenses].sort((a,b)=> a.data < b.data ? -1 : 1).map(e=>[
-      fmtDate(e.data), e.colaborador, e.categoria, (e.descricao||'').replace(/;/g,','), Number(e.valor).toFixed(2).replace('.',',')
+      fmtDate(e.data), e.colaborador, e.categoria, (e.descricao||'').replace(/;/g,','), Number(e.valor).toFixed(2).replace('.',','), e.reciboUrl||''
     ]);
     const csv = [header, ...rows].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(';')).join('\n');
     const blob = new Blob(['\ufeff'+csv], { type:'text/csv;charset=utf-8;' });
@@ -575,7 +778,7 @@
 
   document.getElementById('fData').valueAsDate = new Date();
 
-  loadExpenses();
+  init();
 })();
 </script>
 </body>
