@@ -618,6 +618,13 @@
             <label for="aSenha">Senha provisória</label>
             <input type="text" id="aSenha" placeholder="mínimo 6 caracteres" minlength="6" required>
           </div>
+          <div class="field">
+            <label for="aRole">Tipo de acesso</label>
+            <select id="aRole" required>
+              <option value="vendedor">Vendedor</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
         </div>
         <div class="actions">
           <span class="photo-status" id="adminStatus"></span>
@@ -765,7 +772,7 @@ window._fb = {
   isAdmin(email){
     return ADMIN_EMAILS.includes((email||'').toLowerCase());
   },
-  async createUser(email, password, criadoPor){
+  async createUser(email, password, criadoPor, role){
     // instância secundária: cria o usuário sem derrubar a sessão do admin logado
     const secondaryApp = initializeApp(firebaseConfig, "Secondary-" + Date.now());
     const secondaryAuth = getAuth(secondaryApp);
@@ -774,12 +781,17 @@ window._fb = {
       await signOut(secondaryAuth);
       await setDoc(doc(db, "colaboradores", cred.user.uid), {
         email,
+        role: role || 'vendedor',
         criadoPor,
         criadoEm: serverTimestamp()
       });
     } finally {
       await deleteApp(secondaryApp);
     }
+  },
+  async getUserRole(uid){
+    const snap = await getDoc(doc(db, "colaboradores", uid));
+    return snap.exists() ? snap.data() : null;
   },
   listenUsers(cb){
     return onSnapshot(collection(db, "colaboradores"), snap=>{
@@ -1437,7 +1449,7 @@ window._fb = {
 
   (async function(){
     const fb = await waitForFb();
-    fb.onAuthChange(function(user){
+    fb.onAuthChange(async function(user){
       if(user){
         loginOverlay.classList.add('hidden');
         appWrap.style.display = '';
@@ -1448,7 +1460,20 @@ window._fb = {
         isLoggedIn = true;
         resetIdleTimer();
 
-        if(fb.isAdmin(user.email)){
+        let role = 'vendedor';
+        try{
+          const perfil = await fb.getUserRole(user.uid);
+          if(perfil && perfil.role){
+            role = perfil.role;
+          } else if(fb.isAdmin(user.email)){
+            role = 'admin'; // conta antiga, criada antes do campo de papel existir
+          }
+        }catch(err){
+          console.error(err);
+          if(fb.isAdmin(user.email)) role = 'admin';
+        }
+
+        if(role === 'admin'){
           isAdminUser = true;
           document.getElementById('sellerView').style.display = 'none';
           document.getElementById('adminDashboardView').style.display = '';
@@ -1485,6 +1510,7 @@ window._fb = {
     ev.preventDefault();
     const email = document.getElementById('aEmail').value.trim();
     const senha = document.getElementById('aSenha').value;
+    const role = document.getElementById('aRole').value;
     const adminStatus = document.getElementById('adminStatus');
     const adminSubmitBtn = document.getElementById('adminSubmitBtn');
     adminSubmitBtn.disabled = true;
@@ -1492,7 +1518,7 @@ window._fb = {
     adminStatus.textContent = 'Cadastrando…';
     try{
       const fb = await waitForFb();
-      await fb.createUser(email, senha, currentUserLabel);
+      await fb.createUser(email, senha, currentUserLabel, role);
       adminStatus.className = 'photo-status ok';
       adminStatus.textContent = 'Usuário cadastrado com sucesso.';
       document.getElementById('adminForm').reset();
@@ -1514,7 +1540,7 @@ window._fb = {
     }
     const sorted = [...list].sort((a,b)=> (a.email||'').localeCompare(b.email||''));
     box.innerHTML = '<strong>Usuários cadastrados nesta plataforma:</strong><br>' +
-      sorted.map(u => escapeHtml(u.email) + (u.criadoPor ? ' — cadastrado por ' + escapeHtml(u.criadoPor) : '')).join('<br>');
+      sorted.map(u => escapeHtml(u.email) + ' — <em>' + (u.role === 'admin' ? 'Admin' : 'Vendedor') + '</em>' + (u.criadoPor ? ' · cadastrado por ' + escapeHtml(u.criadoPor) : '')).join('<br>');
   }
 
 })();
