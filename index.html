@@ -1505,27 +1505,31 @@ window._fb = {
     const colaboradores = [...new Set(list.map(e=>e.colaborador))].join(', ');
 
     const sorted = [...list].sort((a,b)=> a.data < b.data ? -1 : 1);
-    const linhasItens = sorted.map(e =>
-      fmtDate(e.data) + ' | ' + e.colaborador + ' | ' + e.categoria + ' | ' + (e.descricao || '—') + ' | ' + fmtBRL(Number(e.valor))
-      + (e.reciboUrl ? ' | <a href="' + e.reciboUrl + '">imagem do recibo</a>' : '')
-    ).join('<br><br>');
+    const linhasItens = sorted.map((e, idx) =>
+      (idx+1) + ') ' + fmtDate(e.data) + ' — ' + e.categoria + '\n'
+      + '   Colaborador: ' + e.colaborador + '\n'
+      + '   Descrição: ' + (e.descricao || '—') + '\n'
+      + '   Valor: ' + fmtBRL(Number(e.valor))
+      + (e.reciboUrl ? '\n   Recibo: ' + e.reciboUrl : '')
+    ).join('\n\n');
 
     const reviewLink = window.location.origin + window.location.pathname + '?revisar=' + selectedMonth;
 
-    const mensagem = 'Relatório de despesas de viagem para aprovação<br><br>'
-      + 'Período: ' + monthLabel(selectedMonth) + '<br>'
-      + 'Colaborador(es): ' + colaboradores + '<br>'
-      + 'Total de lançamentos: ' + list.length + '<br>'
-      + 'Valor total: ' + fmtBRL(total) + '<br><br>'
-      + 'Para aprovar ou reprovar este relatório, acesse:<br>' + reviewLink + '<br><br>'
-      + 'Detalhamento:<br>'
-      + 'Data | Colaborador | Categoria | Descrição | Valor | Recibo<br><br>'
+    const mensagem = 'RELATÓRIO DE DESPESAS DE VIAGEM — PARA APROVAÇÃO\n\n'
+      + 'Período: ' + monthLabel(selectedMonth) + '\n'
+      + 'Colaborador(es): ' + colaboradores + '\n'
+      + 'Total de lançamentos: ' + list.length + '\n'
+      + 'Valor total: ' + fmtBRL(total) + '\n\n'
+      + 'Para aprovar ou reprovar este relatório, acesse:\n' + reviewLink + '\n\n'
+      + '----------------------------------------\n'
+      + 'DETALHAMENTO DAS DESPESAS\n'
+      + '----------------------------------------\n\n'
       + linhasItens;
 
     try{
       await emailjs.send('service_pedidos', 'template_m8m586t', {
         to_email: 'abchemicalspr@gmail.com',
-        subject: 'Relatório de despesas de viagem — ' + monthLabel(selectedMonth) + ' — AB Chemicals',
+        subject: 'Relatório de despesas de viagem — ' + colaboradores + ' — ' + monthLabel(selectedMonth),
         message: mensagem
       });
 
