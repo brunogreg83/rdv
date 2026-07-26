@@ -421,6 +421,19 @@
   }
   .login-overlay.hidden{display:none;}
 
+  .history-badge{
+    display:inline-block;
+    font-size:10.5px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:.3px;
+    padding:2px 8px;
+    border-radius:20px;
+  }
+  .history-badge.enviado{background:var(--teal-soft);color:var(--teal-deep);}
+  .history-badge.aprovado{background:var(--teal-soft);color:var(--teal-deep);}
+  .history-badge.reprovado{background:#F4DED8;color:var(--danger);}
+
   @media (max-width: 720px){
     .grid{grid-template-columns:1fr 1fr;}
     .field.span2, .field.span3{grid-column:span 2;}
@@ -637,6 +650,11 @@
     <div class="panel">
       <h2>Aprovações pendentes</h2>
       <div id="approvalsList"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Histórico de relatórios</h2>
+      <div id="reportsHistory"></div>
     </div>
 
     <div class="panel">
@@ -927,6 +945,7 @@ window._fb = {
   function renderAdminDashboard(){
     if(!isAdminUser) return;
     renderApprovalsList();
+    renderReportsHistory();
     renderExpenseChart();
   }
 
@@ -958,6 +977,41 @@ window._fb = {
 
   document.getElementById('approvalsList').addEventListener('click', function(ev){
     const btn = ev.target.closest('.review-inline');
+    if(!btn) return;
+    openReview(btn.getAttribute('data-month'));
+  });
+
+  function renderReportsHistory(){
+    const box = document.getElementById('reportsHistory');
+    const entries = Object.entries(reportsByMonth);
+    if(entries.length === 0){
+      box.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;">Nenhum relatório submetido ainda.</p>';
+      return;
+    }
+    entries.sort((a,b)=> a[0] < b[0] ? 1 : -1);
+    box.innerHTML = entries.map(([monthKey, r]) => {
+      const list = expenses.filter(e => monthKeyOf(e.data) === monthKey);
+      const total = list.reduce((acc,e)=>acc+Number(e.valor||0), 0);
+      const colaboradores = [...new Set(list.map(e=>e.colaborador))].join(', ');
+      const status = r.status || 'enviado';
+      const statusLabel = status === 'aprovado' ? 'Aprovado' : status === 'reprovado' ? 'Reprovado' : 'Enviado';
+      return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:10px;">
+        <div>
+          <strong>${monthLabel(monthKey)}</strong>
+          <span class="history-badge ${status}" style="margin-left:8px;">${statusLabel}</span><br>
+          <span style="font-size:12.5px;color:var(--ink-soft);">${escapeHtml(colaboradores||'—')} · ${list.length} lançamento(s) · ${fmtBRL(total)}</span>
+        </div>
+        <div>
+          <button type="button" class="history-view" data-month="${monthKey}">Ver detalhes</button>
+        </div>
+      </div>
+    `;
+    }).join('');
+  }
+
+  document.getElementById('reportsHistory').addEventListener('click', function(ev){
+    const btn = ev.target.closest('.history-view');
     if(!btn) return;
     openReview(btn.getAttribute('data-month'));
   });
