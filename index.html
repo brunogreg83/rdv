@@ -933,18 +933,23 @@ window._fb = {
       return;
     }
     entries.sort((a,b)=> a[0] < b[0] ? 1 : -1);
-    box.innerHTML = entries.map(([monthKey, r]) => `
+    box.innerHTML = entries.map(([monthKey, r]) => {
+      const list = expenses.filter(e => monthKeyOf(e.data) === monthKey);
+      const total = list.reduce((acc,e)=>acc+Number(e.valor||0), 0);
+      const colaboradores = [...new Set(list.map(e=>e.colaborador))].join(', ');
+      return `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:10px;">
         <div>
           <strong>${monthLabel(monthKey)}</strong><br>
-          <span style="font-size:12.5px;color:var(--ink-soft);">${escapeHtml(r.colaboradores||'—')} · ${r.quantidade||0} lançamento(s) · ${fmtBRL(Number(r.totalDespesas||0))}</span>
+          <span style="font-size:12.5px;color:var(--ink-soft);">${escapeHtml(colaboradores||'—')} · ${list.length} lançamento(s) · ${fmtBRL(total)}</span>
         </div>
         <div>
           <button type="button" class="approve-inline" data-month="${monthKey}" style="background:var(--teal);border-color:var(--teal);margin-right:8px;">Aprovar</button>
           <button type="button" class="reject-inline" data-month="${monthKey}" style="background:var(--danger);border-color:var(--danger);">Reprovar</button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 
   document.getElementById('approvalsList').addEventListener('click', async function(ev){
