@@ -112,6 +112,7 @@
   .summary .card{
     background:var(--paper);
     padding:16px 18px;
+    min-width:0;
   }
   .summary .card.total{background:var(--teal-deep);color:var(--paper);}
   .summary .card .label{
@@ -148,7 +149,7 @@
     grid-template-columns:1fr 1fr 1fr;
     gap:14px;
   }
-  .field{display:flex;flex-direction:column;gap:5px;}
+  .field{display:flex;flex-direction:column;gap:5px;min-width:0;}
   .field.span2{grid-column:span 2;}
   .field.span3{grid-column:span 3;}
   label{font-size:12px;color:var(--ink-soft);font-weight:500;}
@@ -160,6 +161,8 @@
     border-radius:var(--radius);
     background:var(--paper);
     color:var(--ink);
+    width:100%;
+    min-width:0;
   }
   input:focus, select:focus, textarea:focus{
     outline:2px solid var(--teal);
@@ -170,6 +173,8 @@
     background:var(--teal-soft);
     color:var(--ink-soft);
     cursor:not-allowed;
+    text-overflow:ellipsis;
+    overflow:hidden;
   }
   textarea{resize:vertical;min-height:44px;}
   .actions{display:flex;justify-content:flex-end;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap;}
@@ -445,6 +450,12 @@
     tbody td::before{content:attr(data-label);color:var(--ink-soft);font-size:11px;text-transform:uppercase;}
   }
 
+  @media (max-width: 480px){
+    .grid{grid-template-columns:1fr;}
+    .field.span2, .field.span3{grid-column:span 1;}
+    .summary{grid-template-columns:1fr;}
+  }
+
   @media print{
     .panel.form, .actions, .row-actions, footer .hint, .modal-overlay{display:none !important;}
     body{background:#fff;}
@@ -624,6 +635,10 @@
       <form id="adminForm">
         <div class="grid">
           <div class="field span2">
+            <label for="aNome">Nome do colaborador</label>
+            <input type="text" id="aNome" placeholder="Ex.: João Silva" required>
+          </div>
+          <div class="field span2">
             <label for="aEmail">E-mail do colaborador</label>
             <input type="email" id="aEmail" placeholder="colaborador@abchemicals.com" required>
           </div>
@@ -794,7 +809,7 @@ window._fb = {
   isAdmin(email){
     return ADMIN_EMAILS.includes((email||'').toLowerCase());
   },
-  async createUser(email, password, criadoPor, role){
+  async createUser(email, password, criadoPor, role, nome){
     // instância secundária: cria o usuário sem derrubar a sessão do admin logado
     const secondaryApp = initializeApp(firebaseConfig, "Secondary-" + Date.now());
     const secondaryAuth = getAuth(secondaryApp);
@@ -803,6 +818,7 @@ window._fb = {
       await signOut(secondaryAuth);
       await setDoc(doc(db, "colaboradores", cred.user.uid), {
         email,
+        nome: nome || null,
         role: role || 'vendedor',
         criadoPor,
         criadoEm: serverTimestamp()
@@ -1590,15 +1606,13 @@ window._fb = {
         loginOverlay.classList.add('hidden');
         appWrap.style.display = '';
         document.getElementById('loggedInAs').textContent = user.email;
-        currentUserLabel = user.displayName || user.email;
-        restoreColaborador();
-        fColaborador.readOnly = true;
         isLoggedIn = true;
         resetIdleTimer();
 
         let role = 'vendedor';
+        let perfil = null;
         try{
-          const perfil = await fb.getUserRole(user.uid);
+          perfil = await fb.getUserRole(user.uid);
           if(perfil && perfil.role){
             role = perfil.role;
           } else if(fb.isAdmin(user.email)){
@@ -1608,6 +1622,11 @@ window._fb = {
           console.error(err);
           if(fb.isAdmin(user.email)) role = 'admin';
         }
+
+        currentUserLabel = (perfil && perfil.nome) || user.displayName || user.email;
+        restoreColaborador();
+        fColaborador.readOnly = true;
+        document.getElementById('loggedInAs').textContent = currentUserLabel;
 
         if(role === 'admin'){
           isAdminUser = true;
@@ -1644,6 +1663,7 @@ window._fb = {
 
   document.getElementById('adminForm').addEventListener('submit', async function(ev){
     ev.preventDefault();
+    const nome = document.getElementById('aNome').value.trim();
     const email = document.getElementById('aEmail').value.trim();
     const senha = document.getElementById('aSenha').value;
     const role = document.getElementById('aRole').value;
@@ -1654,7 +1674,7 @@ window._fb = {
     adminStatus.textContent = 'Cadastrando…';
     try{
       const fb = await waitForFb();
-      await fb.createUser(email, senha, currentUserLabel, role);
+      await fb.createUser(email, senha, currentUserLabel, role, nome);
       adminStatus.className = 'photo-status ok';
       adminStatus.textContent = 'Usuário cadastrado com sucesso.';
       document.getElementById('adminForm').reset();
@@ -1674,9 +1694,9 @@ window._fb = {
       box.textContent = 'Nenhum usuário cadastrado por aqui ainda.';
       return;
     }
-    const sorted = [...list].sort((a,b)=> (a.email||'').localeCompare(b.email||''));
+    const sorted = [...list].sort((a,b)=> (a.nome||a.email||'').localeCompare(b.nome||b.email||''));
     box.innerHTML = '<strong>Usuários cadastrados nesta plataforma:</strong><br>' +
-      sorted.map(u => escapeHtml(u.email) + ' — <em>' + (u.role === 'admin' ? 'Admin' : 'Vendedor') + '</em>' + (u.criadoPor ? ' · cadastrado por ' + escapeHtml(u.criadoPor) : '')).join('<br>');
+      sorted.map(u => escapeHtml(u.nome || u.email) + ' (' + escapeHtml(u.email) + ')' + ' — <em>' + (u.role === 'admin' ? 'Admin' : 'Vendedor') + '</em>' + (u.criadoPor ? ' · cadastrado por ' + escapeHtml(u.criadoPor) : '')).join('<br>');
   }
 
 })();
