@@ -727,7 +727,7 @@ import {
   getStorage, ref, uploadString, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 import {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -820,6 +820,7 @@ window._fb = {
         email,
         nome: nome || null,
         role: role || 'vendedor',
+        ativo: true,
         criadoPor,
         criadoEm: serverTimestamp()
       });
@@ -830,6 +831,15 @@ window._fb = {
   async getUserRole(uid){
     const snap = await getDoc(doc(db, "colaboradores", uid));
     return snap.exists() ? snap.data() : null;
+  },
+  async updateUserProfile(uid, dados){
+    return await updateDoc(doc(db, "colaboradores", uid), dados);
+  },
+  async setUserActive(uid, ativo){
+    return await updateDoc(doc(db, "colaboradores", uid), { ativo });
+  },
+  async sendPasswordReset(email){
+    return await sendPasswordResetEmail(auth, email);
   },
   listenUsers(cb){
     return onSnapshot(collection(db, "colaboradores"), snap=>{
@@ -1554,6 +1564,7 @@ window._fb = {
   let isLoggedIn = false;
   let idleTimer = null;
   let autoLoggedOut = false;
+  let contaDesativada = false;
   const IDLE_LIMIT_MS = 10 * 60 * 1000;
 
   function resetIdleTimer(){
@@ -1623,6 +1634,12 @@ window._fb = {
           if(fb.isAdmin(user.email)) role = 'admin';
         }
 
+        if(perfil && perfil.ativo === false){
+          contaDesativada = true;
+          await fb.logout();
+          return;
+        }
+
         currentUserLabel = (perfil && perfil.nome) || user.displayName || user.email;
         restoreColaborador();
         fColaborador.readOnly = true;
@@ -1656,6 +1673,10 @@ window._fb = {
           loginError.textContent = 'Sessão encerrada por inatividade (10 minutos). Faça login novamente.';
           loginError.style.display = 'block';
           autoLoggedOut = false;
+        } else if(contaDesativada){
+          loginError.textContent = 'Esta conta foi desativada. Contate o administrador.';
+          loginError.style.display = 'block';
+          contaDesativada = false;
         }
       }
     });
@@ -1688,16 +1709,123 @@ window._fb = {
     }
   });
 
+  let lastUserList = [];
+  let editingUserId = null;
+
   function renderUserList(list){
+    lastUserList = list;
     const box = document.getElementById('userList');
     if(list.length === 0){
-      box.textContent = 'Nenhum usuário cadastrado por aqui ainda.';
+      box.innerHTML = '<p style="color:var(--ink-soft);font-size:13px;">Nenhum usuário cadastrado por aqui ainda.</p>';
       return;
     }
     const sorted = [...list].sort((a,b)=> (a.nome||a.email||'').localeCompare(b.nome||b.email||''));
-    box.innerHTML = '<strong>Usuários cadastrados nesta plataforma:</strong><br>' +
-      sorted.map(u => escapeHtml(u.nome || u.email) + ' (' + escapeHtml(u.email) + ')' + ' — <em>' + (u.role === 'admin' ? 'Admin' : 'Vendedor') + '</em>' + (u.criadoPor ? ' · cadastrado por ' + escapeHtml(u.criadoPor) : '')).join('<br>');
+
+    box.innerHTML = '<strong style="display:block;margin-bottom:10px;">Usuários cadastrados nesta plataforma</strong>' +
+      sorted.map(u => {
+        const ativo = u.ativo !== false;
+        if(u.id === editingUserId){
+          return `
+          <div style="padding:12px 0;border-bottom:1px solid var(--line);">
+            <div class="grid" style="grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+              <div class="field">
+                <label>Nome</label>
+                <input type="text" id="editNome_${u.id}" value="${escapeHtml(u.nome||'')}">
+              </div>
+              <div class="field">
+                <label>Papel</label>
+                <select id="editRole_${u.id}">
+                  <option value="vendedor" ${u.role!=='admin'?'selected':''}>Vendedor</option>
+                  <option value="admin" ${u.role==='admin'?'selected':''}>Admin</option>
+                </select>
+              </div>
+            </div>
+            <button type="button" class="save-user" data-id="${u.id}" style="margin-right:8px;">Salvar</button>
+            <button type="button" class="ghost cancel-edit-user" data-id="${u.id}">Cancelar</button>
+          </div>`;
+        }
+        return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);flex-wrap:wrap;gap:10px;">
+          <div>
+            ${escapeHtml(u.nome || u.email)} (${escapeHtml(u.email)})
+            — <em>${u.role === 'admin' ? 'Admin' : 'Vendedor'}</em>
+            <span class="history-badge ${ativo ? 'aprovado' : 'reprovado'}" style="margin-left:6px;">${ativo ? 'Ativo' : 'Desativado'}</span>
+          </div>
+          <div>
+            <button type="button" class="ghost edit-user" data-id="${u.id}" style="margin-right:6px;">Editar</button>
+            <button type="button" class="ghost reset-pw" data-email="${escapeHtml(u.email)}" style="margin-right:6px;">Redefinir senha</button>
+            <button type="button" class="toggle-active" data-id="${u.id}" data-active="${ativo}" style="background:${ativo ? 'var(--danger)' : 'var(--teal)'};border-color:${ativo ? 'var(--danger)' : 'var(--teal)'};">${ativo ? 'Desativar' : 'Reativar'}</button>
+          </div>
+        </div>`;
+      }).join('');
   }
+
+  document.getElementById('userList').addEventListener('click', async function(ev){
+    const editBtn = ev.target.closest('.edit-user');
+    const cancelBtn = ev.target.closest('.cancel-edit-user');
+    const saveBtn = ev.target.closest('.save-user');
+    const resetBtn = ev.target.closest('.reset-pw');
+    const toggleBtn = ev.target.closest('.toggle-active');
+
+    if(editBtn){
+      editingUserId = editBtn.getAttribute('data-id');
+      renderUserList(lastUserList);
+      return;
+    }
+    if(cancelBtn){
+      editingUserId = null;
+      renderUserList(lastUserList);
+      return;
+    }
+    if(saveBtn){
+      const uid = saveBtn.getAttribute('data-id');
+      const nome = document.getElementById('editNome_'+uid).value.trim();
+      const role = document.getElementById('editRole_'+uid).value;
+      saveBtn.disabled = true;
+      try{
+        const fb = await waitForFb();
+        await fb.updateUserProfile(uid, { nome, role });
+        editingUserId = null;
+      }catch(err){
+        console.error(err);
+        alert('Erro ao salvar alterações do usuário.');
+        saveBtn.disabled = false;
+      }
+      return;
+    }
+    if(resetBtn){
+      const email = resetBtn.getAttribute('data-email');
+      if(!confirm('Enviar e-mail de redefinição de senha para ' + email + '?')) return;
+      resetBtn.disabled = true;
+      try{
+        const fb = await waitForFb();
+        await fb.sendPasswordReset(email);
+        alert('E-mail de redefinição enviado para ' + email + '.');
+      }catch(err){
+        console.error(err);
+        alert('Erro ao enviar e-mail de redefinição: ' + (err.code || err.message || err));
+      }finally{
+        resetBtn.disabled = false;
+      }
+      return;
+    }
+    if(toggleBtn){
+      const uid = toggleBtn.getAttribute('data-id');
+      const currentlyActive = toggleBtn.getAttribute('data-active') === 'true';
+      const acao = currentlyActive ? 'desativar' : 'reativar';
+      if(!confirm('Confirma ' + acao + ' este usuário?')) return;
+      toggleBtn.disabled = true;
+      try{
+        const fb = await waitForFb();
+        await fb.setUserActive(uid, !currentlyActive);
+      }catch(err){
+        console.error(err);
+        alert('Erro ao atualizar status do usuário.');
+        toggleBtn.disabled = false;
+      }
+      return;
+    }
+  });
 
 })();
 </script>
