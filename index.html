@@ -747,6 +747,24 @@ const COL     = "despesas_viagem";
 
 const ADMIN_EMAILS = ["abchemicalspr@gmail.com"];
 
+// ── Integração com o ERP Cloud (lançamento em Contas a pagar) ───────────────
+const erpFirebaseConfig = {
+  apiKey: "AIzaSyAlOXxe7Hthply4YwWlHC0Ov9OvFnW6qJY",
+  authDomain: "ab-clean-1f6a3.firebaseapp.com",
+  projectId: "ab-clean-1f6a3",
+  storageBucket: "ab-clean-1f6a3.firebasestorage.app",
+  messagingSenderId: "520953502156",
+  appId: "1:520953502156:web:ed5cfcd87aba70fffca569"
+};
+let erpDb = null;
+function getErpDb(){
+  if(!erpDb){
+    const erpApp = initializeApp(erpFirebaseConfig, "ERP-" + Date.now());
+    erpDb = getFirestore(erpApp);
+  }
+  return erpDb;
+}
+
 window._fb = {
   listen(cb){
     const q = query(collection(db, COL), orderBy("data", "desc"));
@@ -846,6 +864,17 @@ window._fb = {
       const items = [];
       snap.forEach(d=> items.push({ id: d.id, ...d.data() }));
       cb(items);
+    });
+  },
+  async lancarContaPagarERP(monthLabelText, report){
+    const db2 = getErpDb();
+    return await addDoc(collection(db2, "pagar"), {
+      fornecedor: (report && report.colaboradores) || 'Colaborador RDV',
+      valor: (report && Number(report.totalDespesas)) || 0,
+      vencimento: new Date().toISOString().slice(0,10),
+      desc: 'Relatório de despesas de viagem — ' + monthLabelText,
+      status: 'pendente',
+      origem: 'rdv'
     });
   }
 };
@@ -1284,6 +1313,17 @@ window._fb = {
       resultBox.style.display = 'block';
       resultBox.style.color = status === 'aprovado' ? 'var(--teal-deep)' : 'var(--danger)';
       resultBox.textContent = status === 'aprovado' ? 'Relatório aprovado com sucesso.' : 'Relatório reprovado.';
+
+      if(status === 'aprovado'){
+        try{
+          const report = reportsByMonth[reviewMonthKey] || {};
+          await fb.lancarContaPagarERP(monthLabel(reviewMonthKey), report);
+          resultBox.textContent += ' Lançado no contas a pagar do ERP.';
+        }catch(erpErr){
+          console.error(erpErr);
+          resultBox.textContent += ' (Atenção: falha ao lançar no ERP — lance manualmente.)';
+        }
+      }
     }catch(err){
       console.error(err);
       alert('Erro ao registrar a decisão. Tente novamente.');
