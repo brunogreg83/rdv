@@ -729,6 +729,9 @@ import {
 import {
   getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  getFunctions, httpsCallable
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCteNyGlV3QrO6YgCkuBmvJrXQOIeA9dNc",
@@ -743,6 +746,7 @@ const app     = initializeApp(firebaseConfig);
 const db      = getFirestore(app);
 const storage = getStorage(app);
 const auth    = getAuth(app);
+const functionsInstance = getFunctions(app);
 const COL     = "despesas_viagem";
 
 const ADMIN_EMAILS = ["abchemicalspr@gmail.com"];
@@ -1108,40 +1112,12 @@ window._fb = {
     });
   }
 
-  const OPENAI_API_KEY = "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";
   const CATEGORIAS_VALIDAS = ['Transporte','Combustível','Pedágio','Hospedagem','Alimentação','Outros'];
 
   async function analyzeReceipt(dataUrl){
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + OPENAI_API_KEY
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'Você extrai dados de recibos e notas fiscais de despesas de viagem para preencher um formulário. Responda SOMENTE com um JSON válido, sem markdown e sem texto adicional, no formato exato: {"data":"YYYY-MM-DD","valor":0.00,"categoria":"Transporte|Combustível|Pedágio|Hospedagem|Alimentação|Outros","descricao":"texto curto"}. Escolha a categoria mais próxima entre as listadas. Se não conseguir identificar um campo com confiança, use null nesse campo.'
-          },
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Extraia os dados deste recibo.' },
-              { type: 'image_url', image_url: { url: dataUrl } }
-            ]
-          }
-        ],
-        max_tokens: 300
-      })
-    });
-
-    const data = await response.json();
-    if(data.error) throw new Error(data.error.message || 'Erro na API da OpenAI');
-    const raw = data.choices[0].message.content;
-    const clean = raw.replace(/```json|```/g, '').trim();
-    return JSON.parse(clean);
+    const call = httpsCallable(functionsInstance, 'analyzeReceipt');
+    const result = await call({ imageDataUrl: dataUrl });
+    return result.data;
   }
 
   function compressImageDataUrl(dataUrl, maxDim, quality){
