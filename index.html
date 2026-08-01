@@ -1171,7 +1171,7 @@ window._fb = {
         fotoStatus.textContent = file.name + ' · dados preenchidos automaticamente (confira antes de salvar)';
       }catch(err){
         console.error('Falha ao analisar recibo com IA:', err);
-        fotoStatus.textContent = file.name + ' · não foi possível ler os dados automaticamente, preencha manualmente';
+        fotoStatus.textContent = file.name + ' · IA falhou: ' + (err && err.message ? err.message : 'erro desconhecido') + ' — preencha manualmente';
       }
     };
     reader.readAsDataURL(file);
