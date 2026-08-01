@@ -1144,12 +1144,37 @@ window._fb = {
     return JSON.parse(clean);
   }
 
+  function compressImageDataUrl(dataUrl, maxDim, quality){
+    return new Promise(function(resolve, reject){
+      const img = new Image();
+      img.onload = function(){
+        let w = img.width, h = img.height;
+        if(w > h && w > maxDim){ h = Math.round(h * (maxDim / w)); w = maxDim; }
+        else if(h > maxDim){ w = Math.round(w * (maxDim / h)); h = maxDim; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
   fFoto.addEventListener('change', function(){
     const file = fFoto.files[0];
     if(!file) return;
     const reader = new FileReader();
     reader.onload = async function(e){
-      pendingPhotoDataUrl = e.target.result;
+      let originalDataUrl = e.target.result;
+      fotoStatus.textContent = 'Otimizando foto…';
+      try{
+        pendingPhotoDataUrl = await compressImageDataUrl(originalDataUrl, 1600, 0.75);
+      }catch(err){
+        console.error('Falha ao comprimir imagem, usando original:', err);
+        pendingPhotoDataUrl = originalDataUrl;
+      }
       fotoPreview.src = pendingPhotoDataUrl;
       fotoPreview.style.display = 'block';
       fotoStatus.textContent = 'Analisando recibo com IA…';
