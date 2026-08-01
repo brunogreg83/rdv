@@ -880,6 +880,11 @@ window._fb = {
       status: 'pendente',
       origem: 'rdv'
     });
+  },
+  async analyzeReceipt(dataUrl){
+    const call = httpsCallable(functionsInstance, 'analyzeReceipt');
+    const result = await call({ imageDataUrl: dataUrl });
+    return result.data;
   }
 };
 </script>
@@ -1115,9 +1120,8 @@ window._fb = {
   const CATEGORIAS_VALIDAS = ['Transporte','Combustível','Pedágio','Hospedagem','Alimentação','Outros'];
 
   async function analyzeReceipt(dataUrl){
-    const call = httpsCallable(functionsInstance, 'analyzeReceipt');
-    const result = await call({ imageDataUrl: dataUrl });
-    return result.data;
+    const fb = await waitForFb();
+    return await fb.analyzeReceipt(dataUrl);
   }
 
   function compressImageDataUrl(dataUrl, maxDim, quality){
