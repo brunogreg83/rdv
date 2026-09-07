@@ -460,6 +460,11 @@
     .panel.form, .actions, .row-actions, footer .hint, .modal-overlay{display:none !important;}
     body{background:#fff;}
   }
+/* AB EMBEDDED ADMIN */
+body.rdv-embedded-admin #loginOverlay{display:none !important;}
+body.rdv-embedded-admin #appWrap{display:block !important;}
+body.rdv-embedded-admin #sellerView{display:none !important;}
+body.rdv-embedded-admin #adminDashboardView{display:block !important;}
 </style>
 </head>
 <body>
@@ -738,6 +743,9 @@ import {
 
 
 const rdvEmbeddedAdmin = new URLSearchParams(window.location.search).get('embedded') === 'admin';
+if (rdvEmbeddedAdmin) {
+  document.body.classList.add('rdv-embedded-admin');
+}
 if (rdvEmbeddedAdmin) {
   const backBtn = document.getElementById('backToErpBtn');
   if (backBtn) {
