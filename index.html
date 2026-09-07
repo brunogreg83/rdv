@@ -735,7 +735,7 @@ import {
   getStorage, ref, uploadString, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 import {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail, setPersistence, browserLocalPersistence
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail, setPersistence, browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   getFunctions, httpsCallable
@@ -762,10 +762,16 @@ const firebaseConfig = {
   appId: "1:644639016024:web:c1f1881cf30dfff14b762d"
 };
 
+// O RDV usa o mesmo projeto Firebase para os dados, mas duas instâncias
+// de autenticação independentes: uma para o RDV externo e outra para o RDV
+// aberto dentro do ERP. Isso permite usuários diferentes simultaneamente.
 const app     = initializeApp(firebaseConfig);
 const db      = getFirestore(app);
 const storage = getStorage(app);
-const auth    = getAuth(app);
+const authExternal = getAuth(app);
+const internalAuthApp = initializeApp(firebaseConfig, "RDV-INTERNO-AUTH");
+const authInternal = getAuth(internalAuthApp);
+const auth = rdvEmbeddedAdmin ? authInternal : authExternal;
 const functionsInstance = getFunctions(app);
 const COL     = "despesas_viagem";
 
@@ -1624,9 +1630,10 @@ window._fb = {
   const loginOverlay = document.getElementById('loginOverlay');
   const appWrap = document.getElementById('appWrap');
   if(rdvEmbeddedAdmin){
-    loginOverlay.classList.add('hidden');
-    appWrap.style.display = '';
+    const subtitle = document.querySelector('.login-card .brand p, #loginOverlay .brand p');
+    if(subtitle) subtitle.textContent = 'RDV INTERNO · ACESSO DO ERP';
   }
+
   const loginForm = document.getElementById('loginForm');
   const loginError = document.getElementById('loginError');
   const loginBtn = document.getElementById('loginBtn');
@@ -1717,12 +1724,10 @@ window._fb = {
 
   (async function(){
     const fb = await waitForFb();
-    if(rdvEmbeddedAdmin){
-      try{
-        await signInAnonymously(auth);
-      }catch(err){
-        console.error('Falha na autenticação do RDV integrado:', err);
-      }
+    try{
+      await setPersistence(auth, browserLocalPersistence);
+    }catch(err){
+      console.error('Falha ao configurar persistência da sessão:', err);
     }
     fb.onAuthChange(async function(user){
       if(user){
@@ -1777,21 +1782,6 @@ window._fb = {
       } else {
         isLoggedIn = false;
             document.getElementById('reviewOverlay').classList.remove('open');
-
-        if(rdvEmbeddedAdmin){
-          // O RDV incorporado ao ERP não usa o login de vendedor.
-          // Autenticação anônima mantém o acesso ao Firebase sem expor a tela de login.
-          loginOverlay.classList.add('hidden');
-          appWrap.style.display = '';
-          isAdminUser = true;
-          document.getElementById('sellerView').style.display = 'none';
-          document.getElementById('adminDashboardView').style.display = '';
-          if(!initialized){
-            initialized = true;
-            init();
-          }
-          return;
-        }
 
         appWrap.style.display = 'none';
         loginOverlay.classList.remove('hidden');
