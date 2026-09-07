@@ -485,6 +485,11 @@
       <div class="actions" style="justify-content:flex-start;">
         <button type="submit" id="loginBtn">Entrar</button>
       </div>
+      <div style="margin-top:14px;">
+        <button type="button" id="forgotPasswordBtn" class="ghost" style="padding:6px 0;border:none;text-decoration:underline;">
+          Esqueci minha senha
+        </button>
+      </div>
     </form>
   </div>
 </div>
@@ -730,7 +735,7 @@ import {
   getStorage, ref, uploadString, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
 import {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail, setPersistence, browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
   getFunctions, httpsCallable
@@ -1630,27 +1635,7 @@ window._fb = {
   let usersInitialized = false;
   let isAdminUser = false;
   let isLoggedIn = false;
-  let idleTimer = null;
-  let autoLoggedOut = false;
   let contaDesativada = false;
-  const IDLE_LIMIT_MS = 10 * 60 * 1000;
-
-  function resetIdleTimer(){
-    if(!isLoggedIn) return;
-    clearTimeout(idleTimer);
-    idleTimer = setTimeout(handleIdleLogout, IDLE_LIMIT_MS);
-  }
-
-  async function handleIdleLogout(){
-    if(!isLoggedIn) return;
-    autoLoggedOut = true;
-    const fb = await waitForFb();
-    await fb.logout();
-  }
-
-  ['mousemove','keydown','click','scroll','touchstart'].forEach(evt=>{
-    document.addEventListener(evt, resetIdleTimer, { passive:true });
-  });
 
   loginForm.addEventListener('submit', async function(ev){
     ev.preventDefault();
@@ -1659,16 +1644,68 @@ window._fb = {
     loginBtn.disabled = true;
     loginBtn.textContent = 'Entrando…';
     loginError.style.display = 'none';
+    loginError.style.color = 'var(--danger)';
     try{
       const fb = await waitForFb();
+      await setPersistence(auth, browserLocalPersistence);
       await fb.login(email, password);
     }catch(err){
-      loginError.textContent = 'Não foi possível entrar. Confira o e-mail e a senha.';
+      console.error('Erro de login Firebase:', err);
+      const code = err && err.code ? err.code : '';
+      let msg = 'Não foi possível entrar.';
+
+      if(code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found'){
+        msg = 'E-mail ou senha incorretos. Se necessário, use “Esqueci minha senha”.';
+      }else if(code === 'auth/user-disabled'){
+        msg = 'Esta conta está desativada no Firebase. Contate o administrador.';
+      }else if(code === 'auth/operation-not-allowed'){
+        msg = 'O login por e-mail e senha está desativado no Firebase.';
+      }else if(code === 'auth/too-many-requests'){
+        msg = 'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.';
+      }else if(code === 'auth/network-request-failed'){
+        msg = 'Falha de conexão com o Firebase. Verifique a internet e tente novamente.';
+      }else if(code){
+        msg = 'Erro de autenticação (' + code + ').';
+      }
+
+      loginError.textContent = msg;
       loginError.style.display = 'block';
-      console.error(err);
     }finally{
       loginBtn.disabled = false;
       loginBtn.textContent = 'Entrar';
+    }
+  });
+
+  document.getElementById('forgotPasswordBtn').addEventListener('click', async function(){
+    const email = document.getElementById('loginEmail').value.trim();
+    if(!email){
+      loginError.textContent = 'Digite seu e-mail primeiro para receber o link de redefinição.';
+      loginError.style.display = 'block';
+      document.getElementById('loginEmail').focus();
+      return;
+    }
+
+    const btn = this;
+    btn.disabled = true;
+    loginError.style.display = 'none';
+
+    try{
+      const fb = await waitForFb();
+      await fb.sendPasswordReset(email);
+      loginError.style.color = 'var(--teal-deep)';
+      loginError.textContent = 'Enviamos um link de redefinição para ' + email + '. Verifique também a caixa de spam.';
+      loginError.style.display = 'block';
+    }catch(err){
+      console.error('Erro ao enviar redefinição:', err);
+      loginError.style.color = 'var(--danger)';
+      const code = err && err.code ? err.code : '';
+      loginError.textContent =
+        code === 'auth/user-not-found'
+          ? 'Não encontramos uma conta com esse e-mail.'
+          : 'Não foi possível enviar a redefinição. Verifique o e-mail e tente novamente.';
+      loginError.style.display = 'block';
+    }finally{
+      btn.disabled = false;
     }
   });
 
@@ -1693,7 +1730,6 @@ window._fb = {
         appWrap.style.display = '';
         document.getElementById('loggedInAs').textContent = user.email;
         isLoggedIn = true;
-        resetIdleTimer();
 
         let role = 'vendedor';
         let perfil = null;
@@ -1740,8 +1776,7 @@ window._fb = {
         }
       } else {
         isLoggedIn = false;
-        clearTimeout(idleTimer);
-        document.getElementById('reviewOverlay').classList.remove('open');
+            document.getElementById('reviewOverlay').classList.remove('open');
 
         if(rdvEmbeddedAdmin){
           // O RDV incorporado ao ERP não usa o login de vendedor.
@@ -1760,11 +1795,7 @@ window._fb = {
 
         appWrap.style.display = 'none';
         loginOverlay.classList.remove('hidden');
-        if(autoLoggedOut){
-          loginError.textContent = 'Sessão encerrada por inatividade (10 minutos). Faça login novamente.';
-          loginError.style.display = 'block';
-          autoLoggedOut = false;
-        } else if(contaDesativada){
+        if(contaDesativada){
           loginError.textContent = 'Esta conta foi desativada. Contate o administrador.';
           loginError.style.display = 'block';
           contaDesativada = false;
