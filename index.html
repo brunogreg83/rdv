@@ -460,11 +460,11 @@
     .panel.form, .actions, .row-actions, footer .hint, .modal-overlay{display:none !important;}
     body{background:#fff;}
   }
-/* AB EMBEDDED ADMIN */
-body.rdv-embedded-admin #loginOverlay{display:none !important;}
-body.rdv-embedded-admin #appWrap{display:block !important;}
-body.rdv-embedded-admin #sellerView{display:none !important;}
-body.rdv-embedded-admin #adminDashboardView{display:block !important;}
+/* AB | ERP — modo Gestão RDV */
+html.rdv-embedded-admin #loginOverlay{display:none !important;}
+html.rdv-embedded-admin #sellerView{display:none !important;}
+html.rdv-embedded-admin #adminDashboardView{display:block !important;}
+html.rdv-embedded-admin #logoutLink{display:none !important;}
 </style>
 </head>
 <body>
@@ -744,7 +744,15 @@ import {
 
 const rdvEmbeddedAdmin = new URLSearchParams(window.location.search).get('embedded') === 'admin';
 if (rdvEmbeddedAdmin) {
-  document.body.classList.add('rdv-embedded-admin');
+  // Só libera a Gestão do RDV quando aberta pelo próprio ERP e a sessão
+  // administrativa do ERP estiver presente no mesmo domínio.
+  let erpSession = null;
+  try { erpSession = JSON.parse(localStorage.getItem('abc_auth') || 'null'); } catch(e) {}
+  if (!erpSession || erpSession.perfil !== 'admin') {
+    document.documentElement.innerHTML = '<body style="font-family:system-ui;padding:40px;text-align:center"><h2>Acesso não autorizado</h2><p>Abra a Gestão do RDV pelo menu RDV do AB | ERP.</p></body>';
+    throw new Error('AB_RDV_EMBEDDED_UNAUTHORIZED');
+  }
+  document.documentElement.classList.add('rdv-embedded-admin');
 }
 if (rdvEmbeddedAdmin) {
   const backBtn = document.getElementById('backToErpBtn');
@@ -1688,33 +1696,46 @@ window._fb = {
 
   (async function(){
     const fb = await waitForFb();
+
     if(rdvEmbeddedAdmin){
+      // O ERP já autenticou o administrador. O RDV usa uma sessão anônima
+      // apenas como credencial técnica para acessar seus dados no Firebase;
+      // a autorização da tela vem da sessão admin do ERP, verificada acima.
       try{
         await signInAnonymously(auth);
       }catch(err){
-        console.error('Falha na autenticação do RDV integrado:', err);
+        console.error('Falha na autenticação técnica do RDV integrado:', err);
+        loginOverlay.classList.add('hidden');
+        appWrap.style.display = '';
+        document.getElementById('sellerView').style.display = 'none';
+        const adminView = document.getElementById('adminDashboardView');
+        adminView.style.display = '';
+        adminView.innerHTML = '<div class="panel"><h2>Não foi possível conectar à Gestão do RDV</h2><p>Ative o provedor <b>Anônimo</b> em Firebase Authentication do projeto RDV.</p></div>';
+        return;
       }
     }
+
     fb.onAuthChange(async function(user){
       if(user){
         loginOverlay.classList.add('hidden');
         appWrap.style.display = '';
-        document.getElementById('loggedInAs').textContent = user.email;
+        document.getElementById('loggedInAs').textContent = rdvEmbeddedAdmin ? 'Administrador ERP' : (user.email || 'Usuário');
         isLoggedIn = true;
         resetIdleTimer();
 
         let role = 'vendedor';
         let perfil = null;
         try{
-          perfil = await fb.getUserRole(user.uid);
-          if(perfil && perfil.role){
-            role = perfil.role;
-          } else if(fb.isAdmin(user.email)){
-            role = 'admin'; // conta antiga, criada antes do campo de papel existir
+          if(!rdvEmbeddedAdmin){
+            perfil = await fb.getUserRole(user.uid);
+            if(perfil && perfil.role) role = perfil.role;
+            else if(fb.isAdmin(user.email)) role = 'admin';
+          } else {
+            role = 'admin';
           }
         }catch(err){
           console.error(err);
-          if(fb.isAdmin(user.email)) role = 'admin';
+          if(!rdvEmbeddedAdmin && fb.isAdmin(user.email)) role = 'admin';
         }
 
         if(perfil && perfil.ativo === false){
@@ -1723,7 +1744,7 @@ window._fb = {
           return;
         }
 
-        currentUserLabel = (perfil && perfil.nome) || user.displayName || user.email;
+        currentUserLabel = rdvEmbeddedAdmin ? 'Administrador ERP' : ((perfil && perfil.nome) || user.displayName || user.email);
         restoreColaborador();
         fColaborador.readOnly = true;
         document.getElementById('loggedInAs').textContent = currentUserLabel;
@@ -1752,30 +1773,23 @@ window._fb = {
         document.getElementById('reviewOverlay').classList.remove('open');
 
         if(rdvEmbeddedAdmin){
-          // O RDV incorporado ao ERP não usa o login de vendedor.
-          // Autenticação anônima mantém o acesso ao Firebase sem expor a tela de login.
+          // Nunca exibe o login de vendedor no modo incorporado.
           loginOverlay.classList.add('hidden');
           appWrap.style.display = '';
-          isAdminUser = true;
           document.getElementById('sellerView').style.display = 'none';
           document.getElementById('adminDashboardView').style.display = '';
-          if(!initialized){
-            initialized = true;
-            init();
+        } else {
+          appWrap.style.display = 'none';
+          loginOverlay.classList.remove('hidden');
+          if(autoLoggedOut){
+            loginError.textContent = 'Sessão encerrada por inatividade (10 minutos). Faça login novamente.';
+            loginError.style.display = 'block';
+            autoLoggedOut = false;
+          } else if(contaDesativada){
+            loginError.textContent = 'Esta conta foi desativada. Contate o administrador.';
+            loginError.style.display = 'block';
+            contaDesativada = false;
           }
-          return;
-        }
-
-        appWrap.style.display = 'none';
-        loginOverlay.classList.remove('hidden');
-        if(autoLoggedOut){
-          loginError.textContent = 'Sessão encerrada por inatividade (10 minutos). Faça login novamente.';
-          loginError.style.display = 'block';
-          autoLoggedOut = false;
-        } else if(contaDesativada){
-          loginError.textContent = 'Esta conta foi desativada. Contate o administrador.';
-          loginError.style.display = 'block';
-          contaDesativada = false;
         }
       }
     });
