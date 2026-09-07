@@ -725,7 +725,42 @@
   </div>
 </div>
 
+<script>
+  // Diagnóstico de inicialização: se o módulo Firebase não carregar,
+  // a tela de login informa o problema em vez de ficar silenciosa.
+  window.__rdvModuleStarted = false;
+  window.addEventListener('error', function(ev){
+    if(!window.__rdvModuleStarted){
+      const box = document.getElementById('loginError');
+      if(box){
+        box.style.display = 'block';
+        box.textContent = 'O sistema não conseguiu carregar o módulo do Firebase. Atualize a página e tente novamente.';
+      }
+    }
+    console.error('Erro de carregamento RDV:', ev.error || ev.message || ev);
+  });
+  window.addEventListener('unhandledrejection', function(ev){
+    if(!window.__rdvModuleStarted){
+      const box = document.getElementById('loginError');
+      if(box){
+        box.style.display = 'block';
+        box.textContent = 'O sistema não conseguiu iniciar o Firebase. Verifique a conexão e atualize a página.';
+      }
+    }
+    console.error('Falha de inicialização RDV:', ev.reason || ev);
+  });
+  setTimeout(function(){
+    if(window.__rdvModuleStarted) return;
+    const box = document.getElementById('loginError');
+    if(box){
+      box.style.display = 'block';
+      box.textContent = 'O sistema demorou para carregar. Atualize a página (Ctrl+F5) e tente novamente.';
+    }
+  }, 8000);
+</script>
+
 <script type="module">
+window.__rdvModuleStarted = true;
 import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {
   getFirestore, collection, addDoc, updateDoc, deleteDoc,
@@ -766,13 +801,21 @@ const firebaseConfig = {
 // de autenticação independentes: uma para o RDV externo e outra para o RDV
 // aberto dentro do ERP. Isso permite usuários diferentes simultaneamente.
 const app     = initializeApp(firebaseConfig);
-const db      = getFirestore(app);
-const storage = getStorage(app);
 const authExternal = getAuth(app);
 const internalAuthApp = initializeApp(firebaseConfig, "RDV-INTERNO-AUTH");
 const authInternal = getAuth(internalAuthApp);
 const auth = rdvEmbeddedAdmin ? authInternal : authExternal;
-const functionsInstance = getFunctions(app);
+
+// Cada sessão usa também sua própria instância do Firestore/Storage.
+// Assim, o usuário interno e o externo podem autenticar separadamente
+// e as regras do Firebase recebem o usuário correto em cada contexto.
+const dbExternal = getFirestore(app);
+const storageExternal = getStorage(app);
+const dbInternal = getFirestore(internalAuthApp);
+const storageInternal = getStorage(internalAuthApp);
+const db = rdvEmbeddedAdmin ? dbInternal : dbExternal;
+const storage = rdvEmbeddedAdmin ? storageInternal : storageExternal;
+const functionsInstance = rdvEmbeddedAdmin ? getFunctions(internalAuthApp) : getFunctions(app);
 const COL     = "despesas_viagem";
 
 const ADMIN_EMAILS = ["abchemicalspr@gmail.com"];
@@ -1654,6 +1697,9 @@ window._fb = {
     loginError.style.color = 'var(--danger)';
     try{
       const fb = await waitForFb();
+      if(!auth){
+        throw new Error('Firebase Auth não foi inicializado.');
+      }
       await setPersistence(auth, browserLocalPersistence);
       await fb.login(email, password);
     }catch(err){
@@ -1673,6 +1719,8 @@ window._fb = {
         msg = 'Falha de conexão com o Firebase. Verifique a internet e tente novamente.';
       }else if(code){
         msg = 'Erro de autenticação (' + code + ').';
+      }else if(err && err.message){
+        msg = 'Falha ao iniciar o login: ' + err.message;
       }
 
       loginError.textContent = msg;
