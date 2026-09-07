@@ -1618,6 +1618,10 @@ window._fb = {
 
   const loginOverlay = document.getElementById('loginOverlay');
   const appWrap = document.getElementById('appWrap');
+  if(rdvEmbeddedAdmin){
+    loginOverlay.classList.add('hidden');
+    appWrap.style.display = '';
+  }
   const loginForm = document.getElementById('loginForm');
   const loginError = document.getElementById('loginError');
   const loginBtn = document.getElementById('loginBtn');
@@ -1709,7 +1713,7 @@ window._fb = {
         fColaborador.readOnly = true;
         document.getElementById('loggedInAs').textContent = currentUserLabel;
 
-        if(role === 'admin'){
+        if(role === 'admin' || rdvEmbeddedAdmin){
           isAdminUser = true;
           document.getElementById('sellerView').style.display = 'none';
           document.getElementById('adminDashboardView').style.display = '';
