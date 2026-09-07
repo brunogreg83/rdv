@@ -792,6 +792,7 @@ try {
 
 
 const rdvEmbeddedAdmin = new URLSearchParams(window.location.search).get('embedded') === 'admin';
+window.rdvEmbeddedAdmin = rdvEmbeddedAdmin;
 if (rdvEmbeddedAdmin) {
   const backBtn = document.getElementById('backToErpBtn');
   if (backBtn) {
@@ -819,6 +820,9 @@ const authExternal = getAuth(app);
 const internalAuthApp = initializeApp(firebaseConfig, "RDV-INTERNO-AUTH");
 const authInternal = getAuth(internalAuthApp);
 const auth = rdvEmbeddedAdmin ? authInternal : authExternal;
+window.__rdvAuth = auth;
+window.__rdvSetPersistence = setPersistence;
+window.__rdvBrowserLocalPersistence = browserLocalPersistence;
 
 // Cada sessão usa também sua própria instância do Firestore/Storage.
 // Assim, o usuário interno e o externo podem autenticar separadamente
@@ -1689,7 +1693,7 @@ window._fb = {
 
   const loginOverlay = document.getElementById('loginOverlay');
   const appWrap = document.getElementById('appWrap');
-  if(rdvEmbeddedAdmin){
+  if(window.rdvEmbeddedAdmin){
     const subtitle = document.querySelector('.login-card .brand p, #loginOverlay .brand p');
     if(subtitle) subtitle.textContent = 'RDV INTERNO · ACESSO DO ERP';
   }
@@ -1714,10 +1718,10 @@ window._fb = {
     loginError.style.color = 'var(--danger)';
     try{
       const fb = await waitForFb();
-      if(!auth){
+      if(!window.__rdvAuth){
         throw new Error('Firebase Auth não foi inicializado.');
       }
-      await setPersistence(auth, browserLocalPersistence);
+      await window.__rdvSetPersistence(window.__rdvAuth, window.__rdvBrowserLocalPersistence);
       await fb.login(email, password);
     }catch(err){
       console.error('Erro de login Firebase:', err);
@@ -1790,7 +1794,7 @@ window._fb = {
   (async function(){
     const fb = await waitForFb();
     try{
-      await setPersistence(auth, browserLocalPersistence);
+      await window.__rdvSetPersistence(window.__rdvAuth, window.__rdvBrowserLocalPersistence);
     }catch(err){
       console.error('Falha ao configurar persistência da sessão:', err);
     }
@@ -1826,7 +1830,7 @@ window._fb = {
         fColaborador.readOnly = true;
         document.getElementById('loggedInAs').textContent = currentUserLabel;
 
-        if(role === 'admin' || rdvEmbeddedAdmin){
+        if(role === 'admin' || window.rdvEmbeddedAdmin){
           isAdminUser = true;
           document.getElementById('sellerView').style.display = 'none';
           document.getElementById('adminDashboardView').style.display = '';
