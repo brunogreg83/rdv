@@ -970,6 +970,9 @@ window._fb = {
     return result.data;
   }
 };
+} catch(err){
+  showFirebaseBootError(err);
+}
 </script>
 
 <script>
@@ -2002,9 +2005,6 @@ window._fb = {
   });
 
 })();
-catch(err){
-  showFirebaseBootError(err);
-}
 
 </script>
 </body>
