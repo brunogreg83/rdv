@@ -761,20 +761,34 @@
 
 <script type="module">
 window.__rdvModuleStarted = true;
-import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import {
-  getFirestore, collection, addDoc, updateDoc, deleteDoc,
-  doc, onSnapshot, serverTimestamp, query, orderBy, setDoc, getDoc
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import {
-  getStorage, ref, uploadString, getDownloadURL, deleteObject
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
-import {
-  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail, setPersistence, browserLocalPersistence
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import {
-  getFunctions, httpsCallable
-} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
+
+// Carregamento dinâmico: se algum módulo externo falhar, mostramos o erro real na tela.
+const FB_BASE = "https://www.gstatic.com/firebasejs/10.12.0/";
+function showFirebaseBootError(err){
+  console.error("Falha ao carregar o Firebase do RDV:", err);
+  window.__rdvFirebaseBootError = err;
+  const el = document.getElementById('loginError');
+  if(el){
+    const code = err?.code ? ` [${err.code}]` : '';
+    el.textContent = `Falha ao carregar o Firebase${code}. Recarregue a página. Se continuar, me envie esta mensagem: ${err?.message || String(err)}`;
+    el.style.display = 'block';
+  }
+}
+
+try {
+  const [appMod, fsMod, stMod, authMod, fnMod] = await Promise.all([
+    import(FB_BASE + 'firebase-app.js'),
+    import(FB_BASE + 'firebase-firestore.js'),
+    import(FB_BASE + 'firebase-storage.js'),
+    import(FB_BASE + 'firebase-auth.js'),
+    import(FB_BASE + 'firebase-functions.js')
+  ]);
+  const { initializeApp, deleteApp } = appMod;
+  const { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy, setDoc, getDoc } = fsMod;
+  const { getStorage, ref, uploadString, getDownloadURL, deleteObject } = stMod;
+  const { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail, setPersistence, browserLocalPersistence } = authMod;
+  const { getFunctions, httpsCallable } = fnMod;
+
 
 
 const rdvEmbeddedAdmin = new URLSearchParams(window.location.search).get('embedded') === 'admin';
@@ -1988,6 +2002,10 @@ window._fb = {
   });
 
 })();
+catch(err){
+  showFirebaseBootError(err);
+}
+
 </script>
 </body>
 </html>
