@@ -485,11 +485,6 @@
       <div class="actions" style="justify-content:flex-start;">
         <button type="submit" id="loginBtn">Entrar</button>
       </div>
-      <div style="margin-top:14px;">
-        <button type="button" id="forgotPasswordBtn" class="ghost" style="padding:6px 0;border:none;text-decoration:underline;">
-          Esqueci minha senha
-        </button>
-      </div>
     </form>
   </div>
 </div>
@@ -507,10 +502,7 @@
     <div class="manifest-id">
       Manifesto Nº <span class="num" id="manifestId">—</span><br>
       Emitido em <span id="issuedAt">—</span><br>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <button type="button" id="backToErpBtn" class="ghost" style="display:none;padding:6px 12px;">← Voltar ao ERP</button>
-        <a href="#" id="logoutLink" style="color:var(--teal);text-decoration:underline;">Sair (<span id="loggedInAs"></span>)</a>
-      </div>
+      <a href="#" id="logoutLink" style="color:var(--teal);text-decoration:underline;">Sair (<span id="loggedInAs"></span>)</a>
     </div>
   </header>
 
@@ -725,83 +717,21 @@
   </div>
 </div>
 
-<script>
-  // Diagnóstico de inicialização: se o módulo Firebase não carregar,
-  // a tela de login informa o problema em vez de ficar silenciosa.
-  window.__rdvModuleStarted = false;
-  window.addEventListener('error', function(ev){
-    if(!window.__rdvModuleStarted){
-      const box = document.getElementById('loginError');
-      if(box){
-        box.style.display = 'block';
-        box.textContent = 'O sistema não conseguiu carregar o módulo do Firebase. Atualize a página e tente novamente.';
-      }
-    }
-    console.error('Erro de carregamento RDV:', ev.error || ev.message || ev);
-  });
-  window.addEventListener('unhandledrejection', function(ev){
-    if(!window.__rdvModuleStarted){
-      const box = document.getElementById('loginError');
-      if(box){
-        box.style.display = 'block';
-        box.textContent = 'O sistema não conseguiu iniciar o Firebase. Verifique a conexão e atualize a página.';
-      }
-    }
-    console.error('Falha de inicialização RDV:', ev.reason || ev);
-  });
-  setTimeout(function(){
-    if(window.__rdvModuleStarted) return;
-    const box = document.getElementById('loginError');
-    if(box){
-      box.style.display = 'block';
-      box.textContent = 'O sistema demorou para carregar. Atualize a página (Ctrl+F5) e tente novamente.';
-    }
-  }, 8000);
-</script>
-
 <script type="module">
-window.__rdvModuleStarted = true;
-
-// Carregamento dinâmico: se algum módulo externo falhar, mostramos o erro real na tela.
-const FB_BASE = "https://www.gstatic.com/firebasejs/10.12.0/";
-function showFirebaseBootError(err){
-  console.error("Falha ao carregar o Firebase do RDV:", err);
-  window.__rdvFirebaseBootError = err;
-  const el = document.getElementById('loginError');
-  if(el){
-    const code = err?.code ? ` [${err.code}]` : '';
-    el.textContent = `Falha ao carregar o Firebase${code}. Recarregue a página. Se continuar, me envie esta mensagem: ${err?.message || String(err)}`;
-    el.style.display = 'block';
-  }
-}
-
-try {
-  const [appMod, fsMod, stMod, authMod, fnMod] = await Promise.all([
-    import(FB_BASE + 'firebase-app.js'),
-    import(FB_BASE + 'firebase-firestore.js'),
-    import(FB_BASE + 'firebase-storage.js'),
-    import(FB_BASE + 'firebase-auth.js'),
-    import(FB_BASE + 'firebase-functions.js')
-  ]);
-  const { initializeApp, deleteApp } = appMod;
-  const { getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, serverTimestamp, query, orderBy, setDoc, getDoc } = fsMod;
-  const { getStorage, ref, uploadString, getDownloadURL, deleteObject } = stMod;
-  const { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail, setPersistence, browserLocalPersistence } = authMod;
-  const { getFunctions, httpsCallable } = fnMod;
-
-
-
-const rdvEmbeddedAdmin = new URLSearchParams(window.location.search).get('embedded') === 'admin';
-window.rdvEmbeddedAdmin = rdvEmbeddedAdmin;
-if (rdvEmbeddedAdmin) {
-  const backBtn = document.getElementById('backToErpBtn');
-  if (backBtn) {
-    backBtn.style.display = 'inline-flex';
-    backBtn.addEventListener('click', () => {
-      if (window.parent && window.parent !== window) window.parent.postMessage('AB_RDV_VOLTAR_ERP', '*');
-    });
-  }
-}
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, collection, addDoc, updateDoc, deleteDoc,
+  doc, onSnapshot, serverTimestamp, query, orderBy, setDoc, getDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getStorage, ref, uploadString, getDownloadURL, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+import {
+  getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, sendPasswordResetEmail
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  getFunctions, httpsCallable
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-functions.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCteNyGlV3QrO6YgCkuBmvJrXQOIeA9dNc",
@@ -812,28 +742,11 @@ const firebaseConfig = {
   appId: "1:644639016024:web:c1f1881cf30dfff14b762d"
 };
 
-// O RDV usa o mesmo projeto Firebase para os dados, mas duas instâncias
-// de autenticação independentes: uma para o RDV externo e outra para o RDV
-// aberto dentro do ERP. Isso permite usuários diferentes simultaneamente.
 const app     = initializeApp(firebaseConfig);
-const authExternal = getAuth(app);
-const internalAuthApp = initializeApp(firebaseConfig, "RDV-INTERNO-AUTH");
-const authInternal = getAuth(internalAuthApp);
-const auth = rdvEmbeddedAdmin ? authInternal : authExternal;
-window.__rdvAuth = auth;
-window.__rdvSetPersistence = setPersistence;
-window.__rdvBrowserLocalPersistence = browserLocalPersistence;
-
-// Cada sessão usa também sua própria instância do Firestore/Storage.
-// Assim, o usuário interno e o externo podem autenticar separadamente
-// e as regras do Firebase recebem o usuário correto em cada contexto.
-const dbExternal = getFirestore(app);
-const storageExternal = getStorage(app);
-const dbInternal = getFirestore(internalAuthApp);
-const storageInternal = getStorage(internalAuthApp);
-const db = rdvEmbeddedAdmin ? dbInternal : dbExternal;
-const storage = rdvEmbeddedAdmin ? storageInternal : storageExternal;
-const functionsInstance = rdvEmbeddedAdmin ? getFunctions(internalAuthApp) : getFunctions(app);
+const db      = getFirestore(app);
+const storage = getStorage(app);
+const auth    = getAuth(app);
+const functionsInstance = getFunctions(app);
 const COL     = "despesas_viagem";
 
 const ADMIN_EMAILS = ["abchemicalspr@gmail.com"];
@@ -974,9 +887,6 @@ window._fb = {
     return result.data;
   }
 };
-} catch(err){
-  showFirebaseBootError(err);
-}
 </script>
 
 <script>
@@ -1693,11 +1603,6 @@ window._fb = {
 
   const loginOverlay = document.getElementById('loginOverlay');
   const appWrap = document.getElementById('appWrap');
-  if(window.rdvEmbeddedAdmin){
-    const subtitle = document.querySelector('.login-card .brand p, #loginOverlay .brand p');
-    if(subtitle) subtitle.textContent = 'RDV INTERNO · ACESSO DO ERP';
-  }
-
   const loginForm = document.getElementById('loginForm');
   const loginError = document.getElementById('loginError');
   const loginBtn = document.getElementById('loginBtn');
@@ -1706,7 +1611,27 @@ window._fb = {
   let usersInitialized = false;
   let isAdminUser = false;
   let isLoggedIn = false;
+  let idleTimer = null;
+  let autoLoggedOut = false;
   let contaDesativada = false;
+  const IDLE_LIMIT_MS = 10 * 60 * 1000;
+
+  function resetIdleTimer(){
+    if(!isLoggedIn) return;
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(handleIdleLogout, IDLE_LIMIT_MS);
+  }
+
+  async function handleIdleLogout(){
+    if(!isLoggedIn) return;
+    autoLoggedOut = true;
+    const fb = await waitForFb();
+    await fb.logout();
+  }
+
+  ['mousemove','keydown','click','scroll','touchstart'].forEach(evt=>{
+    document.addEventListener(evt, resetIdleTimer, { passive:true });
+  });
 
   loginForm.addEventListener('submit', async function(ev){
     ev.preventDefault();
@@ -1715,73 +1640,16 @@ window._fb = {
     loginBtn.disabled = true;
     loginBtn.textContent = 'Entrando…';
     loginError.style.display = 'none';
-    loginError.style.color = 'var(--danger)';
     try{
       const fb = await waitForFb();
-      if(!window.__rdvAuth){
-        throw new Error('Firebase Auth não foi inicializado.');
-      }
-      await window.__rdvSetPersistence(window.__rdvAuth, window.__rdvBrowserLocalPersistence);
       await fb.login(email, password);
     }catch(err){
-      console.error('Erro de login Firebase:', err);
-      const code = err && err.code ? err.code : '';
-      let msg = 'Não foi possível entrar.';
-
-      if(code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found'){
-        msg = 'E-mail ou senha incorretos. Se necessário, use “Esqueci minha senha”.';
-      }else if(code === 'auth/user-disabled'){
-        msg = 'Esta conta está desativada no Firebase. Contate o administrador.';
-      }else if(code === 'auth/operation-not-allowed'){
-        msg = 'O login por e-mail e senha está desativado no Firebase.';
-      }else if(code === 'auth/too-many-requests'){
-        msg = 'Muitas tentativas de login. Aguarde alguns minutos e tente novamente.';
-      }else if(code === 'auth/network-request-failed'){
-        msg = 'Falha de conexão com o Firebase. Verifique a internet e tente novamente.';
-      }else if(code){
-        msg = 'Erro de autenticação (' + code + ').';
-      }else if(err && err.message){
-        msg = 'Falha ao iniciar o login: ' + err.message;
-      }
-
-      loginError.textContent = msg;
+      loginError.textContent = 'Não foi possível entrar. Confira o e-mail e a senha.';
       loginError.style.display = 'block';
+      console.error(err);
     }finally{
       loginBtn.disabled = false;
       loginBtn.textContent = 'Entrar';
-    }
-  });
-
-  document.getElementById('forgotPasswordBtn').addEventListener('click', async function(){
-    const email = document.getElementById('loginEmail').value.trim();
-    if(!email){
-      loginError.textContent = 'Digite seu e-mail primeiro para receber o link de redefinição.';
-      loginError.style.display = 'block';
-      document.getElementById('loginEmail').focus();
-      return;
-    }
-
-    const btn = this;
-    btn.disabled = true;
-    loginError.style.display = 'none';
-
-    try{
-      const fb = await waitForFb();
-      await fb.sendPasswordReset(email);
-      loginError.style.color = 'var(--teal-deep)';
-      loginError.textContent = 'Enviamos um link de redefinição para ' + email + '. Verifique também a caixa de spam.';
-      loginError.style.display = 'block';
-    }catch(err){
-      console.error('Erro ao enviar redefinição:', err);
-      loginError.style.color = 'var(--danger)';
-      const code = err && err.code ? err.code : '';
-      loginError.textContent =
-        code === 'auth/user-not-found'
-          ? 'Não encontramos uma conta com esse e-mail.'
-          : 'Não foi possível enviar a redefinição. Verifique o e-mail e tente novamente.';
-      loginError.style.display = 'block';
-    }finally{
-      btn.disabled = false;
     }
   });
 
@@ -1793,17 +1661,13 @@ window._fb = {
 
   (async function(){
     const fb = await waitForFb();
-    try{
-      await window.__rdvSetPersistence(window.__rdvAuth, window.__rdvBrowserLocalPersistence);
-    }catch(err){
-      console.error('Falha ao configurar persistência da sessão:', err);
-    }
     fb.onAuthChange(async function(user){
       if(user){
         loginOverlay.classList.add('hidden');
         appWrap.style.display = '';
         document.getElementById('loggedInAs').textContent = user.email;
         isLoggedIn = true;
+        resetIdleTimer();
 
         let role = 'vendedor';
         let perfil = null;
@@ -1830,7 +1694,7 @@ window._fb = {
         fColaborador.readOnly = true;
         document.getElementById('loggedInAs').textContent = currentUserLabel;
 
-        if(role === 'admin' || window.rdvEmbeddedAdmin){
+        if(role === 'admin'){
           isAdminUser = true;
           document.getElementById('sellerView').style.display = 'none';
           document.getElementById('adminDashboardView').style.display = '';
@@ -1850,11 +1714,15 @@ window._fb = {
         }
       } else {
         isLoggedIn = false;
-            document.getElementById('reviewOverlay').classList.remove('open');
-
+        clearTimeout(idleTimer);
         appWrap.style.display = 'none';
+        document.getElementById('reviewOverlay').classList.remove('open');
         loginOverlay.classList.remove('hidden');
-        if(contaDesativada){
+        if(autoLoggedOut){
+          loginError.textContent = 'Sessão encerrada por inatividade (10 minutos). Faça login novamente.';
+          loginError.style.display = 'block';
+          autoLoggedOut = false;
+        } else if(contaDesativada){
           loginError.textContent = 'Esta conta foi desativada. Contate o administrador.';
           loginError.style.display = 'block';
           contaDesativada = false;
@@ -2009,7 +1877,6 @@ window._fb = {
   });
 
 })();
-
 </script>
 </body>
 </html>
